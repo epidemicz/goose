@@ -1,0 +1,9 @@
+phase 1: blocked qget, timer pushes 3 ticks at 100ms
+  got timer=1 seq=1
+  got timer=1 seq=2
+  got timer=1 seq=3
+phase 2: limit 2, burst 10 while not consuming
+  drained timer=1 seq=1
+  drained timer=1 seq=2
+  drained=2 dropped_on_c_side=8
+done

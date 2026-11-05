@@ -1357,6 +1357,9 @@ struct CodeGen {
     // varints, and thread/queue machinery call into the runtime.
 
     unordered_map<string, string> queues;   // Element type mangle -> queue global.
+    unordered_map<string, int64_t> queue_fixed_size;   // Mangle -> FixedSize, or 0 when
+        // the element type has no fixed-size image (resizable / variable-size /
+        // zero-size): those queues get no C-callable push accessor (§11.2).
 
     string QueueFor(TypeExpr *t);
     Loc RecvLoc(Node *n);

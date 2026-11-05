@@ -1,0 +1,3 @@
+// The sidecar of queue_c_push.goose: its C, compiled with the program's
+// build (docs/design/packages.md §4.7, §5.1).
+c_sources = ["queue_c_push.c"];

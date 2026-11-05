@@ -4501,6 +4501,27 @@ relative of the Linda tuple-space / coordination style.
   `qlimit<T>(n)` gives it one of `n` messages; lowering a limit below what
   the queue holds keeps the messages queued, and puts fail until fewer than
   `n` remain. A limit of zero or less aborts with a runtime diagnostic.
+* **Pushing into a queue from C**: a program that uses a queue of a
+  fixed-size flat element type `T` also gets a C function the compiler
+  emits, `gs_queue_push_<mangle>(const void *data, int64_t size) -> uint8_t`,
+  where `<mangle>` is the element type's mangled name as it appears in the
+  generated C (for example `gs_queue_push_Tick_g` for `struct Tick`, or
+  `gs_queue_push_i64`). Any thread may call it -- a library callback, an
+  OS timer, any thread the program did not start -- and it copies the
+  `size` bytes at `data` into the queue, exactly as `qput` would, waking
+  a blocked `qget`. It never blocks and never runs Goose code, so the
+  thread isolation of this section is untouched: the queue is still the
+  only thing shared, and the value still crosses it by copy. It returns
+  `1` once queued and `0` when `size` is not the element type's image
+  size, when the queue is at its limit (the value is dropped, as with
+  `qput`), or when the program has not started (before the program's
+  start, and after `goose_exit`, there is no queue to push into). A
+  caller that needs to know a value was dropped keeps its own count, as
+  it would for a `qput` that returned `false`. Resizable, variable-size
+  and zero-size element types have no such function: their image is not
+  a fixed-size value a C caller can build. The queue needs a `qlimit`
+  or it is unbounded, as with `qput`. The caller declares the prototype
+  itself, in its own C, as it would an `extern fn`'s symbol.
 
 ### 11.3 Dynamic stacks (future)
 

@@ -4082,6 +4082,27 @@ releases what the start set up, so that `goose_init` can start it, or
 another build of it, again in the same process; it is a runtime error
 while a worker of the program still runs. Spec §7.11.
 
+### Pushing into a queue from C
+
+A callback a library calls on its own thread cannot call an `export fn`:
+that would run Goose code on a thread that is not the program's. What it
+can do is push a flat value into one of the program's typed queues, and
+let Goose code take it from there on its own thread. For every queue of
+a fixed-size flat element type `T` the program uses, the compiler emits
+`gs_queue_push_<mangle>(const void *data, int64_t size) -> uint8_t`,
+where `<mangle>` is the element type's mangled name in the generated C
+(`gs_queue_push_Tick_g` for `struct Tick`, `gs_queue_push_i64` for
+`i64`). Any thread may call it; it copies the bytes into the queue,
+exactly as `qput` would, and wakes a blocked `qget`. It never blocks,
+never runs Goose code, and returns `1` once queued, `0` when the size
+is not the element's image size, when the queue is at its limit, or
+when the program has not started. A caller that needs to know a value
+was dropped keeps its own count. Resizable, variable-size and zero-size
+element types have no such function, and a queue with no `qlimit` is
+unbounded. The caller declares the prototype in its own C; the value's
+C layout is the generated type's, which a header supplied by
+`c_headers` or `--include` can use directly. Spec §11.2.
+
 ---
 
 ## 25. Builtins

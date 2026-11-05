@@ -12,6 +12,10 @@ inline string CodeGen::QueueFor(TypeExpr *t) {
     if (it != queues.end()) return it->second;
     auto name = Unique(cat("gs_q_", m));
     Append(data, "static gs_queue ", name, " = GS_QUEUE_INIT;\n");
+    // The C-callable push accessor (EmitProgramInit) takes a fixed-size
+    // image: resizable and variable-size elements have none, and neither
+    // does a value of no bytes. FixedSize is only called for the rest.
+    if (!IsBytesT(t)) queue_fixed_size[m] = FixedSize(t);
     return queues[m] = name;
 }
 

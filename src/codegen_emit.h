@@ -1010,6 +1010,31 @@ inline void CodeGen::EmitProgramInit() {
     for (auto &q : qnames) Append(code, "    gs_qinit(&", q, ");\n");
     Append(code, "    gs_gl = &gs_globals_main;\n    gs_init_globals();\n");
     Append(code, "    gs_program_initialized = 1;\n}\n\n");
+    // A C-callable push into each fixed-size queue (§11.2): a foreign
+    // thread -- a library callback, an OS timer -- copies one flat value
+    // into the queue without running Goose code, exactly as qput would.
+    // The image size is the queue's, checked before the push; the call
+    // never blocks, returns 1 once queued and 0 when the size is wrong,
+    // the queue is at its limit, or the program has not started (before
+    // gs_program_init, and after goose_exit, the queue is NULL, since
+    // GS_QUEUE_INIT is NULL and gs_qfree puts it back). Resizable,
+    // variable-size and zero-size element types have no accessor: their
+    // image is not a fixed-size value a C caller can build.
+    // (Emitted here, after gs_program_init closes: an accessor is a
+    // top-level function of its own, not a statement inside it.)
+    vector<pair<string, string>> qpush;
+    for (auto &[m, fsz] : queue_fixed_size) {
+        if (fsz <= 0) continue;
+        qpush.emplace_back(m, queues[m]);
+    }
+    sort(qpush.begin(), qpush.end());
+    for (auto &[m, q] : qpush) {
+        Append(code, "uint8_t gs_queue_push_", m,
+               "(const void *data, int64_t size) {\n"
+               "    if (size != ", queue_fixed_size[m], " || !", q, ") return 0;\n"
+               "    return gs_qput(&", q, ", data, size);\n"
+               "}\n\n");
+    }
     // A C host starts the program here: its globals, then fn main() if there
     // is one, which may call the exports and can hold the host's own setup.
     // It ends the program with goose_exit, which gives back what the start
