@@ -61,7 +61,7 @@ inline string DeclDetail(const SAlias *al) { return cat("type ", al->qname, " = 
 
 // A builtin as its calls show it: `builtin name<T>(params)`, the receiver
 // (`a`) first for members, `args…` as the variadic tail. Properties have
-// no parentheses. One rendering for hover, signature help and completions.
+// no parentheses.
 inline string BuiltinHead(const BuiltinDef &b, bool dot) {
     string h = cat("builtin ", dot ? "." : "", b.name, b.ty);
     if (b.flags & BF_PROPERTY) return h;
@@ -73,7 +73,7 @@ inline string BuiltinHead(const BuiltinDef &b, bool dot) {
 }
 
 // The table's return characters as display text; "" where the checker
-// computes the return, so only a checked call shows one there.
+// computes the return.
 inline string BuiltinRetText(const BuiltinDef &b) {
     switch (b.rets[0]) {
         case 'i': return "i64";
@@ -105,9 +105,8 @@ inline vector<string> BuiltinParamLabels(const BuiltinDef &b) {
     return ps;
 }
 
-// A checked call's own return types, falling back to its exprtype: some
-// builtin paths return a Val without filling rettypes. With no checked
-// call, the table's return, if it has one.
+// A checked call's own return types, falling back to its exprtype.
+// With no checked call, the table's return, if it has one.
 inline void AppendBuiltinRet(string &h, const BuiltinDef &b, const Call *c, bool dot) {
     auto sep = (dot && (b.flags & BF_PROPERTY)) ? ": " : " -> ";
     if (c && !c->rettypes.empty()) {
@@ -564,8 +563,7 @@ inline HoverText HoverDot(const Located &loc, const Occurrence &occ) {
     auto &an = *loc.an;
     auto &ast = *an.ast;
     auto d = Is<Dot>(occ.node);
-    // A member call is a call, not a field access: answer it from the
-    // checked call before the resolved dot, which also claims its member.
+    // Answer a member call from the checked call before the resolved dot.
     if (occ.callee) {
         auto call = ResolvedCall(loc, occ);
         if (auto sf = CalleeOf(call)) return FnHover(sf);

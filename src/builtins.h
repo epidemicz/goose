@@ -69,11 +69,8 @@ inline int RecvKindOf(TypeExpr *t) {
 
 // `params` are the display labels after the receiver, ", "-separated
 // ("args…" is the variadic tail); `ty` the type parameters, e.g. "<T>";
-// `doc` is one sentence, the reference's own wording (docs/reference.md
-// §25, §5, §22, §23, §14) where it gives one, "" where the name and the
-// signature already say it. All three are display only: the checker works
-// from args/rets, and a checked call's return from its own rettypes, so
-// they can never change checking.
+// `doc` is one sentence from docs/reference.md (§25, §5, §22, §23, §14),
+// "" where the name and the signature already say it. Display only.
 //
 //        enum            name                min max  args  rets recv            grows          flags                                     params, ty, doc
 #define BUILTINS \
