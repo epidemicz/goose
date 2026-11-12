@@ -72,15 +72,15 @@ inline string BuiltinHead(const BuiltinDef &b, bool dot) {
     return h;
 }
 
-// The table's return characters as display text; "" where the checker
-// computes the return.
+// The table's return as display text: its return characters, else its
+// static return.
 inline string BuiltinRetText(const BuiltinDef &b) {
     switch (b.rets[0]) {
         case 'i': return "i64";
         case 'e': return "T";
         case 'r': return "T&";
         case 's': return "T[:]";
-        default: return {};
+        default: return b.ret;
     }
 }
 
@@ -105,8 +105,8 @@ inline vector<string> BuiltinParamLabels(const BuiltinDef &b) {
     return ps;
 }
 
-// A checked call's own return types, falling back to its exprtype.
-// With no checked call, the table's return, if it has one.
+// A checked call's own return types, falling back to its exprtype, then
+// the table's return.
 inline void AppendBuiltinRet(string &h, const BuiltinDef &b, const Call *c, bool dot) {
     auto sep = (dot && (b.flags & BF_PROPERTY)) ? ": " : " -> ";
     if (c && !c->rettypes.empty()) {
@@ -117,7 +117,7 @@ inline void AppendBuiltinRet(string &h, const BuiltinDef &b, const Call *c, bool
         }
     } else if (c && c->exprtype && c->exprtype->kind != TY_VOID) {
         Append(h, sep, TypeText(c->exprtype));
-    } else if (!c) {
+    } else {
         auto r = BuiltinRetText(b);
         if (!r.empty()) Append(h, sep, r);
     }

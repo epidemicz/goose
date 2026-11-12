@@ -45,7 +45,10 @@ fn main() {
     let last = v.pop();
     v.resize(4, 0);
     v.resize(2);
-    print(blocking, timed, ready, image, last);
+    let n = copy(sum);
+    qput(sum);
+    let hw = hardware_threads();
+    print(blocking, timed, ready, image, last, n, hw);
 }
 
 // Called by nothing.
@@ -72,11 +75,22 @@ fn spare(x) { x }
 // lsp: hover 43:19 "builtin .to_bytes(a, out: u8[>..]) -> u8[>..]"
 // lsp: hover 43:19 "a framed image of the array"
 // lsp: hover 45:18 "builtin .pop(a) -> i64"
+// lsp: hover 45:18 "removes and returns the last element"
+// lsp: hover 39:13 "the element count"
+// lsp: hover 48:13 "builtin copy(x) -> i64"
+// lsp: hover 48:13 "a fresh copy of the stored value"
+// lsp: hover 49:6 "builtin qput(v) -> bool"
+// lsp: hover 49:6 "puts `v` on the queue"
+// lsp: hover 50:15 "builtin hardware_threads() -> i64"
+// lsp: hover 50:15 "a sensible worker count"
 // lsp: signature 40:30 "builtin qget<T>(ms: i64) -> i64" 0
 // lsp: signature 41:36 "builtin qget<T>(ms: i64) -> i64, bool" 0 "waits at most"
 // lsp: signature 46:17 "builtin resize(a, n: i64, v: T)" 2
 // lsp: signature 47:14 "builtin resize(a, n: i64, v: T)" 1
 // lsp: complete 40:21 has qget "builtin qget<T>(ms: i64)" "takes the next"
+// lsp: complete 40:21 has copy "builtin copy(x) -> T"
+// lsp: complete 40:21 has qput "builtin qput(v) -> bool"
+// lsp: complete 40:21 has thread_spawn "builtin thread_spawn(worker, args…) -> i64"
 // lsp: complete 43:20 has to_bytes "builtin .to_bytes(a, out: u8[>..])"
 // lsp: definition 31:15 -> 15:4
 // lsp: definition 31:21 -> 10:5
@@ -135,18 +149,18 @@ fn spare(x) { x }
 // lsp: folding 17-20
 // lsp: folding 22-27
 // lsp: folding 23-26
-// lsp: folding 29-49
+// lsp: folding 29-52
 // lsp: selection 31:21 -> 31:21-31:22
 // lsp: selection 31:21 -> 31:19-31:22
 // lsp: selection 31:21 -> 31:15-31:28
-// lsp: selection 31:21 -> 29:1-49:2
+// lsp: selection 31:21 -> 29:1-52:2
 // lsp: lens 15 "2 instantiations"
 // lsp: lens 29 "Run"
-// lsp: lens 52 "not instantiated"
+// lsp: lens 55 "not instantiated"
 // lsp: incoming 15:4 -> main@31,32
 // lsp: incoming 31:15 -> main@31,32
 // lsp: incoming 36:19 -> main@36
-// lsp: incoming 52:4 -> -
+// lsp: incoming 55:4 -> -
 // lsp: outgoing 29:4 -> add@31,32 area@35 twice@36
 // lsp: outgoing 22:4 -> -
 // lsp: incoming 33:11 -> none
