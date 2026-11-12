@@ -64,16 +64,19 @@ fn spare(x) { x }
 // lsp: hover 33:11 "let sum: i64"
 // lsp: hover 36:19 "fn helper::twice(x: i64) -> i64"
 // lsp: hover 38:7 "builtin .push(a, v: T) -> i64&"
+// lsp: hover 38:7 "constructed in place"
 // lsp: hover 39:13 "builtin .len: i64"
 // lsp: hover 40:20 "builtin qget<T>(ms: i64) -> i64"
 // lsp: hover 41:24 "builtin qget<T>(ms: i64) -> i64, bool"
+// lsp: hover 41:24 "waits at most that many milliseconds"
 // lsp: hover 43:19 "builtin .to_bytes(a, out: u8[>..]) -> u8[>..]"
+// lsp: hover 43:19 "a framed image of the array"
 // lsp: hover 45:18 "builtin .pop(a) -> i64"
 // lsp: signature 40:30 "builtin qget<T>(ms: i64) -> i64" 0
-// lsp: signature 41:36 "builtin qget<T>(ms: i64) -> i64, bool" 0
+// lsp: signature 41:36 "builtin qget<T>(ms: i64) -> i64, bool" 0 "waits at most"
 // lsp: signature 46:17 "builtin resize(a, n: i64, v: T)" 2
 // lsp: signature 47:14 "builtin resize(a, n: i64, v: T)" 1
-// lsp: complete 40:21 has qget "builtin qget<T>(ms: i64)"
+// lsp: complete 40:21 has qget "builtin qget<T>(ms: i64)" "takes the next"
 // lsp: complete 43:20 has to_bytes "builtin .to_bytes(a, out: u8[>..])"
 // lsp: definition 31:15 -> 15:4
 // lsp: definition 31:21 -> 10:5

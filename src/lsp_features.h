@@ -529,6 +529,7 @@ inline HoverText HoverIdent(const Located &loc, const Occurrence &occ) {
             auto &b = builtindefs[call->builtin];
             h.header = BuiltinHead(b, false);
             AppendBuiltinRet(h.header, b, call, false);
+            if (b.doc[0]) h.doc = DocText(b.doc);
             return h;
         }
         if (call && call->fvbody) {
@@ -550,6 +551,7 @@ inline HoverText HoverIdent(const Located &loc, const Occurrence &occ) {
     if (!fns.empty()) return OverloadsHover(fns);
     if (auto b = LookupBuiltin(GlobalLeaf(id->name))) {
         h.header = BuiltinDisplay(*b, false);
+        if (b->doc[0]) h.doc = DocText(b->doc);
         return h;
     }
     h.header = string(id->name);
@@ -571,6 +573,7 @@ inline HoverText HoverDot(const Located &loc, const Occurrence &occ) {
             auto &b = builtindefs[call->builtin];
             h.header = BuiltinHead(b, true);
             AppendBuiltinRet(h.header, b, call, true);
+            if (b.doc[0]) h.doc = DocText(b.doc);
             return h;
         }
     }
@@ -582,6 +585,7 @@ inline HoverText HoverDot(const Located &loc, const Occurrence &occ) {
             auto &b = builtindefs[cd->member];
             h.header = BuiltinHead(b, true);
             if (cd->exprtype && cd->exprtype->kind != TY_VOID) Append(h.header, ": ", TypeText(cd->exprtype));
+            if (b.doc[0]) h.doc = DocText(b.doc);
         } else {
             auto f = FieldOfDot(cd);
             h.header = cat(f && f->isconst ? "let " : "", cd->name, ": ", TypeText(cd->exprtype));
@@ -1217,6 +1221,13 @@ inline bool SignatureHelp(Workspace &ws, const Json &params, JsonOut &j) {
         AppendBuiltinRet(label, *b, checked ? Is<Call>(checked) : nullptr, false);
         j.BeginObject();
         j.Member("label", label);
+        if (b->doc[0]) {
+            j.Key("documentation");
+            j.BeginObject();
+            j.Member("kind", "markdown");
+            j.Member("value", DocText(b->doc));
+            j.EndObject();
+        }
         j.Key("parameters");
         j.BeginArray();
         for (auto &p : params) {
@@ -1937,7 +1948,7 @@ inline void ScopeCompletions(const Located &loc, size_t offset, Completions &out
     for (auto &[nsname, ns] : ast.namespaces)
         NamespaceCompletions(nsname, ns, !nsname.empty() && nsname != filens, out);
     for (auto &b : builtindefs)
-        if (!(b.flags & BF_PROPERTY)) out.Add(b.name, CK_FUNCTION, 2, BuiltinDisplay(b, false));
+        if (!(b.flags & BF_PROPERTY)) out.Add(b.name, CK_FUNCTION, 2, BuiltinDisplay(b, false), b.doc);
     for (int t = T_IMPORT; t <= T_TF64; t++) out.Add(TName((TType)t), CK_KEYWORD, 3);
 }
 
@@ -2000,7 +2011,7 @@ inline void MemberCompletions(const Located &loc, size_t dotpos, Completions &ou
         for (auto &b : builtindefs)
             if ((b.flags & (BF_MEMBER | BF_PROPERTY)) && (b.recv & recv))
                 out.Add(b.name, b.flags & BF_PROPERTY ? CK_PROPERTY : CK_METHOD, 2,
-                        BuiltinDisplay(b, true));
+                        BuiltinDisplay(b, true), b.doc);
     };
     auto type = object ? an.TypeOf(object->node) : nullptr;
     if (object && !type)
