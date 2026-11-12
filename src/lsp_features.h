@@ -59,10 +59,69 @@ inline string DeclDetail(const SStruct *st) {
 inline string DeclDetail(const SEnum *en) { return cat("enum ", en->qname, GenericsText(en->generics)); }
 inline string DeclDetail(const SAlias *al) { return cat("type ", al->qname, " = ", TypeText(al->type)); }
 
-// A builtin as its calls show it: `name(N arguments)`.
-inline string BuiltinCallText(const BuiltinDef &b) {
-    return cat(b.name, "(", b.minargs == b.maxargs ? to_string(b.minargs) : cat(b.minargs, "..", b.maxargs),
-               " arguments)");
+// A builtin as its calls show it: `builtin name<T>(params)`, the receiver
+// (`a`) first for members, `args…` as the variadic tail. Properties have
+// no parentheses. One rendering for hover, signature help and completions.
+inline string BuiltinHead(const BuiltinDef &b, bool dot) {
+    string h = cat("builtin ", dot ? "." : "", b.name, b.ty);
+    if (b.flags & BF_PROPERTY) return h;
+    Append(h, "(");
+    if (b.flags & BF_MEMBER) Append(h, "a");
+    if (b.params[0]) Append(h, (b.flags & BF_MEMBER) ? ", " : "", b.params);
+    Append(h, ")");
+    return h;
+}
+
+// The table's return characters as display text; "" where the checker
+// computes the return, so only a checked call shows one there.
+inline string BuiltinRetText(const BuiltinDef &b) {
+    switch (b.rets[0]) {
+        case 'i': return "i64";
+        case 'e': return "T";
+        case 'r': return "T&";
+        case 's': return "T[:]";
+        default: return {};
+    }
+}
+
+// The static form: the head plus the table's return.
+inline string BuiltinDisplay(const BuiltinDef &b, bool dot) {
+    auto h = BuiltinHead(b, dot);
+    auto r = BuiltinRetText(b);
+    if (!r.empty()) Append(h, (dot && (b.flags & BF_PROPERTY)) ? ": " : " -> ", r);
+    return h;
+}
+
+// The parameter labels of a signature, the receiver first for members.
+inline vector<string> BuiltinParamLabels(const BuiltinDef &b) {
+    vector<string> ps;
+    if (b.flags & BF_MEMBER) ps.push_back("a");
+    string_view rest(b.params);
+    while (!rest.empty()) {
+        auto comma = rest.find(", ");
+        ps.push_back(string(comma == string_view::npos ? rest : rest.substr(0, comma)));
+        rest = comma == string_view::npos ? string_view() : rest.substr(comma + 2);
+    }
+    return ps;
+}
+
+// A checked call's own return types, falling back to its exprtype: some
+// builtin paths return a Val without filling rettypes. With no checked
+// call, the table's return, if it has one.
+inline void AppendBuiltinRet(string &h, const BuiltinDef &b, const Call *c, bool dot) {
+    auto sep = (dot && (b.flags & BF_PROPERTY)) ? ": " : " -> ";
+    if (c && !c->rettypes.empty()) {
+        Append(h, sep);
+        for (size_t i = 0; i < c->rettypes.size(); i++) {
+            if (i) Append(h, ", ");
+            Append(h, TypeText(c->rettypes[i]));
+        }
+    } else if (c && c->exprtype && c->exprtype->kind != TY_VOID) {
+        Append(h, sep, TypeText(c->exprtype));
+    } else if (!c) {
+        auto r = BuiltinRetText(b);
+        if (!r.empty()) Append(h, sep, r);
+    }
 }
 
 // A function's declaration as its header line, defaults elided.
@@ -467,9 +526,9 @@ inline HoverText HoverIdent(const Located &loc, const Occurrence &occ) {
         auto call = ResolvedCall(loc, occ);
         if (auto sf = CalleeOf(call)) return FnHover(sf);
         if (call && call->builtin >= 0) {
-            h.header = cat("builtin ", BuiltinCallText(builtindefs[call->builtin]));
-            if (call->exprtype && call->exprtype->kind != TY_VOID)
-                Append(h.header, " -> ", TypeText(call->exprtype));
+            auto &b = builtindefs[call->builtin];
+            h.header = BuiltinHead(b, false);
+            AppendBuiltinRet(h.header, b, call, false);
             return h;
         }
         if (call && call->fvbody) {
@@ -490,7 +549,7 @@ inline HoverText HoverIdent(const Located &loc, const Occurrence &occ) {
     auto &fns = ast.LookupFunctions(id->name, id->ns);
     if (!fns.empty()) return OverloadsHover(fns);
     if (auto b = LookupBuiltin(GlobalLeaf(id->name))) {
-        h.header = cat("builtin ", b->name);
+        h.header = BuiltinDisplay(*b, false);
         return h;
     }
     h.header = string(id->name);
@@ -503,12 +562,25 @@ inline HoverText HoverDot(const Located &loc, const Occurrence &occ) {
     auto &an = *loc.an;
     auto &ast = *an.ast;
     auto d = Is<Dot>(occ.node);
+    // A member call is a call, not a field access: answer it from the
+    // checked call before the resolved dot, which also claims its member.
+    if (occ.callee) {
+        auto call = ResolvedCall(loc, occ);
+        if (auto sf = CalleeOf(call)) return FnHover(sf);
+        if (call && call->builtin >= 0) {
+            auto &b = builtindefs[call->builtin];
+            h.header = BuiltinHead(b, true);
+            AppendBuiltinRet(h.header, b, call, true);
+            return h;
+        }
+    }
     if (auto cd = ResolvedDot(an, occ)) {
         if (cd->variantconst) {
             h.header = VariantHeader(EnumOfVariant(ast, cd->variantconst), cd->variantconst);
             h.doc = DocText(cd->variantconst->doc);
         } else if (cd->member >= 0) {
-            h.header = cat("builtin .", builtindefs[cd->member].name);
+            auto &b = builtindefs[cd->member];
+            h.header = BuiltinHead(b, true);
             if (cd->exprtype && cd->exprtype->kind != TY_VOID) Append(h.header, ": ", TypeText(cd->exprtype));
         } else {
             auto f = FieldOfDot(cd);
@@ -517,16 +589,6 @@ inline HoverText HoverDot(const Located &loc, const Occurrence &occ) {
         }
         NoteExemplar(h, an, cd);
         return h;
-    }
-    if (occ.callee) {
-        auto call = ResolvedCall(loc, occ);
-        if (auto sf = CalleeOf(call)) return FnHover(sf);
-        if (call && call->builtin >= 0) {
-            h.header = cat("builtin .", builtindefs[call->builtin].name);
-            if (call->exprtype && call->exprtype->kind != TY_VOID)
-                Append(h.header, " -> ", TypeText(call->exprtype));
-            return h;
-        }
     }
     auto &fns = MethodsOf(an, d);
     if (occ.callee && !fns.empty()) return OverloadsHover(fns);
@@ -1133,26 +1195,41 @@ inline bool SignatureHelp(Workspace &ws, const Json &params, JsonOut &j) {
     }
     auto &fns = *found;
     auto b = fns.empty() ? LookupBuiltin(GlobalLeaf(name)) : nullptr;
+    if (b && (b->flags & BF_PROPERTY)) b = nullptr;  // A property is not a call.
     if (fns.empty() && !b) return false;
     auto activesig = 0;
     if (auto resolved = SpecializedCall(an, span->call))
         for (size_t i = 0; i < fns.size(); i++)
             if (fns[i] == resolved->spec->sf) activesig = (int)i;
+    auto activeparam = active + (ufcs ? 1 : 0);
     j.BeginObject();
     j.Key("signatures");
     j.BeginArray();
     for (auto sf : fns) WriteSignature(j, sf);
     if (b) {
+        auto params = BuiltinParamLabels(*b);
+        if (!params.empty()) activeparam = min(activeparam, (int)params.size() - 1);
+        auto label = BuiltinHead(*b, false);
+        auto checked = an.Find(span->call, [](const Node *n) {
+            auto x = Is<Call>(n);
+            return x && x->builtin >= 0;
+        });
+        AppendBuiltinRet(label, *b, checked ? Is<Call>(checked) : nullptr, false);
         j.BeginObject();
-        j.Member("label", BuiltinCallText(*b));
+        j.Member("label", label);
         j.Key("parameters");
         j.BeginArray();
+        for (auto &p : params) {
+            j.BeginObject();
+            j.Member("label", p);
+            j.EndObject();
+        }
         j.EndArray();
         j.EndObject();
     }
     j.EndArray();
     j.Member("activeSignature", (int64_t)activesig);
-    j.Member("activeParameter", (int64_t)(active + (ufcs ? 1 : 0)));
+    j.Member("activeParameter", (int64_t)activeparam);
     j.EndObject();
     return true;
 }
@@ -1860,7 +1937,7 @@ inline void ScopeCompletions(const Located &loc, size_t offset, Completions &out
     for (auto &[nsname, ns] : ast.namespaces)
         NamespaceCompletions(nsname, ns, !nsname.empty() && nsname != filens, out);
     for (auto &b : builtindefs)
-        if (!(b.flags & BF_PROPERTY)) out.Add(b.name, CK_FUNCTION, 2, "builtin");
+        if (!(b.flags & BF_PROPERTY)) out.Add(b.name, CK_FUNCTION, 2, BuiltinDisplay(b, false));
     for (int t = T_IMPORT; t <= T_TF64; t++) out.Add(TName((TType)t), CK_KEYWORD, 3);
 }
 
@@ -1922,7 +1999,8 @@ inline void MemberCompletions(const Located &loc, size_t dotpos, Completions &ou
     auto builtins = [&](int recv) {
         for (auto &b : builtindefs)
             if ((b.flags & (BF_MEMBER | BF_PROPERTY)) && (b.recv & recv))
-                out.Add(b.name, b.flags & BF_PROPERTY ? CK_PROPERTY : CK_METHOD, 2, "builtin");
+                out.Add(b.name, b.flags & BF_PROPERTY ? CK_PROPERTY : CK_METHOD, 2,
+                        BuiltinDisplay(b, true));
     };
     auto type = object ? an.TypeOf(object->node) : nullptr;
     if (object && !type)

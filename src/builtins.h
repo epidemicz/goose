@@ -67,52 +67,57 @@ inline int RecvKindOf(TypeExpr *t) {
     return 0;
 }
 
-//        enum            name                min max  args  rets recv            grows          flags
+// `params` are the display labels after the receiver, ", "-separated
+// ("args…" is the variadic tail); `ty` the type parameters, e.g. "<T>".
+// Both are display only: the checker works from args/rets, and a checked
+// call's return from its own rettypes, so they can never change checking.
+//
+//        enum            name                min max  args  rets recv            grows          flags                                     params, ty
 #define BUILTINS \
-    F(B_PRINT,            "print",            0, 99,   "",   "",  0,              "",            0) \
-    F(B_STR,              "str",              0, 99,   "",   "",  0,              "",            0) \
-    F(B_FORMAT,           "format",           1, 99,   "",   "",  BR_GROWABLE,    "format into", BF_MEMBER | BF_WRITE) \
-    F(B_ASSERT,           "assert",           1,  1,   "",   "",  0,              "",            0) \
-    F(B_ABORT,            "abort",            1,  1,   "",   "",  0,              "",            0) \
-    F(B_EXIT,             "exit",             1,  1,   "",   "",  0,              "",            0) \
-    F(B_HARDWARE_THREADS, "hardware_threads", 0,  0,   "",   "i", 0,              "",            0) \
-    F(B_THREAD_SPAWN,     "thread_spawn",     1, 99,   "",   "i", 0,              "",            0) \
-    F(B_THREAD_SPAWN_CONTAINED, "thread_spawn_contained", 1, 99, "", "i", 0,       "",            0) \
-    F(B_THREAD_WAIT,      "thread_wait",      1,  2,   "",   "",  0,              "append to",   BF_OUTARG) \
-    F(B_QPUT,             "qput",             1,  1,   "",   "",  0,              "",            0) \
-    F(B_QGET,             "qget",             0,  1,   "",   "",  0,              "",            BF_TYARGS) \
-    F(B_QPOLL,            "qpoll",            0,  0,   "",   "",  0,              "",            BF_TYARGS) \
-    F(B_QLIMIT,           "qlimit",           1,  1,   "",   "",  0,              "",            BF_TYARGS) \
-    F(B_DEFAULT,          "default",          0,  0,   "",   "",  0,              "",            BF_TYARGS) \
-    F(B_COPY,             "copy",             1,  1,   "",   "",  0,              "",            0) \
-    F(B_MOVE_FROM,        "move_from",        2,  2,   "",   "",  BR_SLICE,       "",            BF_MEMBER | BF_WRITE) \
-    F(B_TO_BYTES,         "to_bytes",         1,  2,   "",   "",  BR_ANY,         "append to",   BF_MEMBER | BF_OUTARG) \
-    F(B_BYTES_OF,         "bytes_of",         1,  1,   "",   "",  BR_ANY,         "",            BF_MEMBER) \
-    F(B_FROM_BYTES,       "from_bytes",       1,  1,   "",   "",  0,              "",            BF_TYARGS) \
-    F(B_EMBED_SHADER,     "embed_shader",     1, 99,   "",   "",  0,              "",            0) \
-    F(B_EMBED_FILE,       "embed_file",       1,  1,   "",   "",  0,              "",            0) \
-    F(B_FILE,             "src_file",         0,  0,   "",   "",  0,              "",            0) \
-    F(B_LINE,             "src_line",         0,  0,   "",   "i", 0,              "",            0) \
-    F(B_LEN,              "len",              1,  1,   "",   "i", BR_ANY,         "",            BF_MEMBER | BF_PROPERTY) \
-    F(B_CAP,              "cap",              1,  1,   "",   "i", BR_LIMITED,     "",            BF_MEMBER | BF_PROPERTY) \
-    F(B_INDEX_OF,         "index_of",         2,  2,   "",   "i", BR_INDEXABLE,   "",            BF_MEMBER) \
-    F(B_RANGE_INDEX,      "range_index",      2,  3,   "",   "i", BR_INDEXABLE,   "",            BF_MEMBER) \
-    F(B_CHECK_LENGTH,     "check_length",     2,  3,   "i",  "i", BR_GROW | BR_GROWSHRINK, "",     BF_MEMBER) \
-    F(B_PUSH,             "push",             2,  2,   "e",  "r", BR_GROWABLE,    "push into",   BF_MEMBER | BF_WRITE) \
-    F(B_APPEND,           "append",           2,  2,   "a",  "",  BR_GROWABLE,    "append to",   BF_MEMBER | BF_WRITE) \
-    F(B_POP,              "pop",              1,  1,   "",   "e", BR_SHRINKABLE,  "",            BF_MEMBER | BF_WRITE | BF_SHRINKS) \
-    F(B_POP_N,            "pop_n",            2,  2,   "i",  "",  BR_SHRINKABLE,  "",            BF_MEMBER | BF_WRITE | BF_SHRINKS) \
-    F(B_RESIZE,           "resize",           2,  3,   "",   "",  BR_SHRINKABLE,  "resize",      BF_MEMBER | BF_WRITE | BF_SHRINKS) \
-    F(B_CLEAR,            "clear",            1,  1,   "",   "",  BR_SHRINKABLE,  "",            BF_MEMBER | BF_WRITE | BF_SHRINKS) \
-    F(B_ALLOC_INDEX,      "alloc_index",      2,  2,   "e",  "i", BR_GROW,        "allocate in", BF_MEMBER | BF_WRITE | BF_REUSABLE) \
-    F(B_ALLOC_REF,        "alloc_ref",        2,  2,   "e",  "r", BR_GROW,        "allocate in", BF_MEMBER | BF_WRITE | BF_REUSABLE) \
-    F(B_FREE,             "free",             2,  2,   "i",  "",  BR_GROW,        "",            BF_MEMBER | BF_WRITE | BF_REUSABLE) \
-    F(B_ALLOC_SLICE,      "alloc_slice",      2,  2,   "",   "s", BR_GROW,        "allocate in", BF_MEMBER | BF_WRITE | BF_SLICEPOOL) \
-    F(B_REALLOC_SLICE,    "realloc_slice",    3,  3,   "",   "s", BR_GROW,        "allocate in", BF_MEMBER | BF_WRITE | BF_SLICEPOOL) \
-    F(B_FREE_SLICE,       "free_slice",       2,  2,   "",   "",  BR_GROW,        "",            BF_MEMBER | BF_WRITE | BF_SLICEPOOL)
+    F(B_PRINT,            "print",            0, 99,   "",   "",  0,              "",            0, "args…", "") \
+    F(B_STR,              "str",              0, 99,   "",   "",  0,              "",            0, "args…", "") \
+    F(B_FORMAT,           "format",           1, 99,   "",   "",  BR_GROWABLE,    "format into", BF_MEMBER | BF_WRITE, "args…", "") \
+    F(B_ASSERT,           "assert",           1,  1,   "",   "",  0,              "",            0, "c", "") \
+    F(B_ABORT,            "abort",            1,  1,   "",   "",  0,              "",            0, "msg: u8[:]", "") \
+    F(B_EXIT,             "exit",             1,  1,   "",   "",  0,              "",            0, "code: i64", "") \
+    F(B_HARDWARE_THREADS, "hardware_threads", 0,  0,   "",   "i", 0,              "",            0, "", "") \
+    F(B_THREAD_SPAWN,     "thread_spawn",     1, 99,   "",   "i", 0,              "",            0, "worker, args…", "") \
+    F(B_THREAD_SPAWN_CONTAINED, "thread_spawn_contained", 1, 99, "", "i", 0,       "",            0, "worker, args…", "") \
+    F(B_THREAD_WAIT,      "thread_wait",      1,  2,   "",   "",  0,              "append to",   BF_OUTARG, "id: i64, msg: u8[>..]", "") \
+    F(B_QPUT,             "qput",             1,  1,   "",   "",  0,              "",            0, "v", "") \
+    F(B_QGET,             "qget",             0,  1,   "",   "",  0,              "",            BF_TYARGS, "ms: i64", "<T>") \
+    F(B_QPOLL,            "qpoll",            0,  0,   "",   "",  0,              "",            BF_TYARGS, "", "<T>") \
+    F(B_QLIMIT,           "qlimit",           1,  1,   "",   "",  0,              "",            BF_TYARGS, "n: i64", "<T>") \
+    F(B_DEFAULT,          "default",          0,  0,   "",   "",  0,              "",            BF_TYARGS, "", "<T>") \
+    F(B_COPY,             "copy",             1,  1,   "",   "",  0,              "",            0, "x", "") \
+    F(B_MOVE_FROM,        "move_from",        2,  2,   "",   "",  BR_SLICE,       "",            BF_MEMBER | BF_WRITE, "src: T[:]", "") \
+    F(B_TO_BYTES,         "to_bytes",         1,  2,   "",   "",  BR_ANY,         "append to",   BF_MEMBER | BF_OUTARG, "out: u8[>..]", "") \
+    F(B_BYTES_OF,         "bytes_of",         1,  1,   "",   "",  BR_ANY,         "",            BF_MEMBER, "", "") \
+    F(B_FROM_BYTES,       "from_bytes",       1,  1,   "",   "",  0,              "",            BF_TYARGS, "b: u8[:]", "<A>") \
+    F(B_EMBED_SHADER,     "embed_shader",     1, 99,   "",   "",  0,              "",            0, "args…", "") \
+    F(B_EMBED_FILE,       "embed_file",       1,  1,   "",   "",  0,              "",            0, "path", "") \
+    F(B_FILE,             "src_file",         0,  0,   "",   "",  0,              "",            0, "", "") \
+    F(B_LINE,             "src_line",         0,  0,   "",   "i", 0,              "",            0, "", "") \
+    F(B_LEN,              "len",              1,  1,   "",   "i", BR_ANY,         "",            BF_MEMBER | BF_PROPERTY, "", "") \
+    F(B_CAP,              "cap",              1,  1,   "",   "i", BR_LIMITED,     "",            BF_MEMBER | BF_PROPERTY, "", "") \
+    F(B_INDEX_OF,         "index_of",         2,  2,   "",   "i", BR_INDEXABLE,   "",            BF_MEMBER, "r: T&", "") \
+    F(B_RANGE_INDEX,      "range_index",      2,  3,   "",   "i", BR_INDEXABLE,   "",            BF_MEMBER, "s: T[:], msg: u8[:]", "") \
+    F(B_CHECK_LENGTH,     "check_length",     2,  3,   "i",  "i", BR_GROW | BR_GROWSHRINK, "",     BF_MEMBER, "n: i64, msg: u8[:]", "") \
+    F(B_PUSH,             "push",             2,  2,   "e",  "r", BR_GROWABLE,    "push into",   BF_MEMBER | BF_WRITE, "v: T", "") \
+    F(B_APPEND,           "append",           2,  2,   "a",  "",  BR_GROWABLE,    "append to",   BF_MEMBER | BF_WRITE, "src", "") \
+    F(B_POP,              "pop",              1,  1,   "",   "e", BR_SHRINKABLE,  "",            BF_MEMBER | BF_WRITE | BF_SHRINKS, "", "") \
+    F(B_POP_N,            "pop_n",            2,  2,   "i",  "",  BR_SHRINKABLE,  "",            BF_MEMBER | BF_WRITE | BF_SHRINKS, "n: i64", "") \
+    F(B_RESIZE,           "resize",           2,  3,   "",   "",  BR_SHRINKABLE,  "resize",      BF_MEMBER | BF_WRITE | BF_SHRINKS, "n: i64, v: T", "") \
+    F(B_CLEAR,            "clear",            1,  1,   "",   "",  BR_SHRINKABLE,  "",            BF_MEMBER | BF_WRITE | BF_SHRINKS, "", "") \
+    F(B_ALLOC_INDEX,      "alloc_index",      2,  2,   "e",  "i", BR_GROW,        "allocate in", BF_MEMBER | BF_WRITE | BF_REUSABLE, "v: T", "") \
+    F(B_ALLOC_REF,        "alloc_ref",        2,  2,   "e",  "r", BR_GROW,        "allocate in", BF_MEMBER | BF_WRITE | BF_REUSABLE, "v: T", "") \
+    F(B_FREE,             "free",             2,  2,   "i",  "",  BR_GROW,        "",            BF_MEMBER | BF_WRITE | BF_REUSABLE, "i: i64", "") \
+    F(B_ALLOC_SLICE,      "alloc_slice",      2,  2,   "",   "s", BR_GROW,        "allocate in", BF_MEMBER | BF_WRITE | BF_SLICEPOOL, "n: i64", "") \
+    F(B_REALLOC_SLICE,    "realloc_slice",    3,  3,   "",   "s", BR_GROW,        "allocate in", BF_MEMBER | BF_WRITE | BF_SLICEPOOL, "s: T[:], n: i64", "") \
+    F(B_FREE_SLICE,       "free_slice",       2,  2,   "",   "",  BR_GROW,        "",            BF_MEMBER | BF_WRITE | BF_SLICEPOOL, "s: T[:]", "")
 
 enum BuiltinKind {
-    #define F(k, n, lo, hi, a, r, rv, gr, fl) k,
+    #define F(k, n, lo, hi, a, r, rv, gr, fl, p, t) k,
     BUILTINS
     #undef F
     B_COUNT
@@ -127,10 +132,12 @@ struct BuiltinDef {
     int recv;                  // BuiltinRecv mask for members.
     const char *grows;         // What a growth by it is called; "" = grows nothing.
     int flags;
+    const char *params;        // Display labels after the receiver; "" = none.
+    const char *ty;            // Display type parameters; "" = none.
 };
 
 inline const BuiltinDef builtindefs[] = {
-    #define F(k, n, lo, hi, a, r, rv, gr, fl) { k, n, lo, hi, a, r, rv, gr, fl },
+    #define F(k, n, lo, hi, a, r, rv, gr, fl, p, t) { k, n, lo, hi, a, r, rv, gr, fl, p, t },
     BUILTINS
     #undef F
 };

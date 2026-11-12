@@ -37,6 +37,15 @@ fn main() {
     var v: i64[>..] = [];
     v.push(sum);
     print(v.len);
+    let blocking = qget<i64>();
+    let timed, ready = qget<i64>(100);
+    var out: u8[>..] = [];
+    let image = v.to_bytes();
+    v.to_bytes(out);
+    let last = v.pop();
+    v.resize(4, 0);
+    v.resize(2);
+    print(blocking, timed, ready, image, last);
 }
 
 // Called by nothing.
@@ -54,8 +63,18 @@ fn spare(x) { x }
 // lsp: hover 35:22 "Shape.Square"
 // lsp: hover 33:11 "let sum: i64"
 // lsp: hover 36:19 "fn helper::twice(x: i64) -> i64"
-// lsp: hover 38:7 "builtin .push"
+// lsp: hover 38:7 "builtin .push(a, v: T) -> i64&"
 // lsp: hover 39:13 "builtin .len: i64"
+// lsp: hover 40:20 "builtin qget<T>(ms: i64) -> i64"
+// lsp: hover 41:24 "builtin qget<T>(ms: i64) -> i64, bool"
+// lsp: hover 43:19 "builtin .to_bytes(a, out: u8[>..]) -> u8[>..]"
+// lsp: hover 45:18 "builtin .pop(a) -> i64"
+// lsp: signature 40:30 "builtin qget<T>(ms: i64) -> i64" 0
+// lsp: signature 41:36 "builtin qget<T>(ms: i64) -> i64, bool" 0
+// lsp: signature 46:17 "builtin resize(a, n: i64, v: T)" 2
+// lsp: signature 47:14 "builtin resize(a, n: i64, v: T)" 1
+// lsp: complete 40:21 has qget "builtin qget<T>(ms: i64)"
+// lsp: complete 43:20 has to_bytes "builtin .to_bytes(a, out: u8[>..])"
 // lsp: definition 31:15 -> 15:4
 // lsp: definition 31:21 -> 10:5
 // lsp: definition 30:13 -> 8:8
@@ -90,7 +109,7 @@ fn spare(x) { x }
 // lsp: references 18:5 2
 // lsp: references 24:16 3
 // lsp: references 22:9 2
-// lsp: references 37:9 3
+// lsp: references 37:9 8
 // lsp: references 36:19 2
 // lsp: rename 31:15 plus -> 3
 // lsp: rename 30:9 q -> 3
@@ -113,18 +132,18 @@ fn spare(x) { x }
 // lsp: folding 17-20
 // lsp: folding 22-27
 // lsp: folding 23-26
-// lsp: folding 29-40
+// lsp: folding 29-49
 // lsp: selection 31:21 -> 31:21-31:22
 // lsp: selection 31:21 -> 31:19-31:22
 // lsp: selection 31:21 -> 31:15-31:28
-// lsp: selection 31:21 -> 29:1-40:2
+// lsp: selection 31:21 -> 29:1-49:2
 // lsp: lens 15 "2 instantiations"
 // lsp: lens 29 "Run"
-// lsp: lens 43 "not instantiated"
+// lsp: lens 52 "not instantiated"
 // lsp: incoming 15:4 -> main@31,32
 // lsp: incoming 31:15 -> main@31,32
 // lsp: incoming 36:19 -> main@36
-// lsp: incoming 43:4 -> -
+// lsp: incoming 52:4 -> -
 // lsp: outgoing 29:4 -> add@31,32 area@35 twice@36
 // lsp: outgoing 22:4 -> -
 // lsp: incoming 33:11 -> none
