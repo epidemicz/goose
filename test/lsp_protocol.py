@@ -229,15 +229,21 @@ def check_lsp_protocol(exe, base):
                 if not any(s["name"] == name and s["kind"] == kinds[symkind] for s in got or []):
                     fail(f"symbol {name} ({symkind})", got)
             elif kind == "signature":
-                pos, want, active = re.match(r'(\S+) "(.*)" (\d+)$', rest).groups()
+                pos, want, active, docwant = re.match(r'(\S+) "(.*)" (\d+)(?: "(.*)")?$', rest).groups()
                 got = client.request("textDocument/signatureHelp", {**doc, "position": position(pos)})
                 if (not got or got["signatures"][got["activeSignature"]]["label"] != want or
                         got["activeParameter"] != int(active)):
                     fail(f"signature {pos}", got)
+                if docwant:
+                    sig = got["signatures"][got["activeSignature"]]
+                    if docwant not in (sig.get("documentation") or {}).get("value", ""):
+                        fail(f"signature {pos} documentation lacks {docwant}", got)
             elif kind == "complete":
-                # `has NAME` / `lacks NAME`: labels; optional text checks detail.
+                # `has NAME` / `lacks NAME`: labels; optional text checks detail,
+                # then documentation.
                 # `inserts NAME`: the item inserts that spelling, as a client would.
-                pos, mode, name, detail = re.match(r'(\S+) (has|lacks|inserts) (\S+)(?: "(.*)")?$', rest).groups()
+                pos, mode, name, detail, docwant = re.match(
+                    r'(\S+) (has|lacks|inserts) (\S+)(?: "([^"]*)")?(?: "([^"]*)")?$', rest).groups()
                 got = client.request("textDocument/completion", {**doc, "position": position(pos)})
                 items = {item["label"]: item for item in (got or {}).get("items", [])}
                 if mode == "inserts":
@@ -249,6 +255,8 @@ def check_lsp_protocol(exe, base):
                     fail(f"completion {pos} {mode} {name}", sorted(items))
                 if detail and detail not in items[name].get("detail", ""):
                     fail(f"completion {pos} {name}'s detail lacks {detail}", items[name])
+                if docwant and docwant not in (items[name].get("documentation") or {}).get("value", ""):
+                    fail(f"completion {pos} {name}'s documentation lacks {docwant}", items[name])
             elif kind == "token":
                 # `none`: no token at the place.
                 pos, want = rest.split()
