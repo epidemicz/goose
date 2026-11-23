@@ -415,7 +415,7 @@ tree, and its `Format` in `format.h` is pure, which the server calls).
 | Feature | Answered from | Needs |
 |---|---|---|
 | Diagnostics on change | the analysis of each root the file belongs to | B, C, E, F; D1 and D2 for more than the first error |
-| Hover | the clone at the position: `exprtype`, a `VarDef`'s type, `DumpInstance` of a `Call::spec`, a declaration's signature and doc; for builtins, `builtindocs`' signature, concrete call types, and doc (or `builtin .name: i64` for properties) | A, H |
+| Hover | the clone at the position: `exprtype`, a `VarDef`'s type, `DumpInstance` of a `Call::spec`, a declaration's signature and doc, plus `= value` on a `const` header for a literal or folded initializer; for builtins, `builtindocs`' signature, concrete call types, and doc (or `builtin .name: i64` for properties) | A, H |
 | Go to definition | `Ident::vdef` (local or global `VarDef`), `fnref` or `Call::spec->sf`, `Dot::fieldidx` into the `SStruct`, `variantconst`, a `TypeExpr`'s `SStruct`/`SEnum`/`SAlias`, an `Import`'s file | A |
 | References, rename | every clone's `Ident`, `Dot`, `Call`, `TypeName` resolving to the declaration, reduced to source nodes by `Origin()`; rename edits the leaf name of each reference and of the declaration | A; across the roots that reach the file |
 | Call hierarchy | the function named at the position, found as for go to definition; its incoming calls are the references that are the callee of a call, grouped by the function declared around each; its outgoing calls are the callees in its body (those in its nested functions are left to them), grouped by the function each resolves to | A (ends, to find the function around a call) |

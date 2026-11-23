@@ -195,9 +195,71 @@ inline string SpecsText(const SFunction *sf, size_t most) {
 // The keyword of a `let`, `var` or `const` declaration.
 inline const char *VarKeyword(const VarDecl *vd) { return vd->isconst ? "const " : vd->isvar ? "var " : "let "; }
 
-inline string VarDefHeader(const VarDef *vd) {
-    auto s = vd->isparam ? cat("parameter ", vd->isvar ? "var " : "") : string(vd->isvar ? "var " : "let ");
+// Hover headers show at most this many bytes of a const string initializer.
+inline constexpr size_t kMaxConstStrHoverBytes = 64;
+
+// Truncate to at most max bytes without splitting a UTF-8 code point: back
+// off over continuation bytes, then drop the lead byte too if its sequence
+// would be cut short.
+inline string_view TruncateUtf8(string_view v, size_t max) {
+    if (v.size() <= max) return v;
+    size_t n = max;
+    while (n > 0 && (uint8_t(v[n - 1]) & 0xC0) == 0x80) n--;
+    if (n > 0) {
+        uint8_t lead = uint8_t(v[n - 1]);
+        size_t need = lead < 0x80 ? 1 : lead < 0xE0 ? 2 : lead < 0xF0 ? 3 : 4;
+        if (n - 1 + need > max) n--;
+    }
+    return v.substr(0, n);
+}
+
+inline string ConstValueSuffix(const VarDecl *decl, size_t idx, const VarDef *def = nullptr) {
+    if (!decl || !decl->isconst || decl->results) return {};
+    if (decl->inits.size() != decl->names.size() || idx >= decl->inits.size()) return {};
+    auto init = decl->inits[idx];
+    if (auto il = Is<IntLit>(init)) {
+        auto dec = il->uns ? cat((uint64_t)il->val) : cat(il->val);
+        if (!il->text.empty() && il->text != dec) return cat(" = ", il->text, " // ", dec);
+        return cat(" = ", dec);
+    }
+    if (auto fl = Is<FltLit>(init))
+        return cat(" = ", !fl->text.empty() ? string(fl->text) : cat(fl->val));
+    if (auto bl = Is<BoolLit>(init))
+        return bl->val ? " = true" : " = false";
+    if (auto sl = Is<StrLit>(init)) {
+        string s = " = ";
+        auto shown = TruncateUtf8(sl->val, kMaxConstStrHoverBytes);
+        EscapeString(s, shown.size() < sl->val.size() ? string_view(string(shown) + "...") : string_view(sl->val), '"');
+        return s;
+    }
+    // A folded value the checker computed, for initializers that are not
+    // themselves literals (e.g. -5, or an alias of another const). The
+    // VarDef carries it; its type says which field holds it. Unchecked
+    // VarDefs have no type, so they show nothing.
+    if (def && def->type) {
+        if (def->type->kind == TY_FLT) return cat(" = ", def->constfval);
+        if (IsIntT(def->type))
+            return cat(" = ", def->constuns ? cat((uint64_t)def->constval) : cat(def->constval));
+    }
+    return {};
+}
+
+inline string VarDefHeader(const VarDef *vd, const VarDecl *decl = nullptr) {
+    auto s = decl ? string(VarKeyword(decl))
+                  : vd->isparam ? cat("parameter ", vd->isvar ? "var " : "")
+                                : string(vd->isvar ? "var " : "let ");
+                                
     Append(s, vd->name, ": ", TypeText(vd->type));
+    
+    if (decl) {
+        for (size_t i = 0; i < decl->names.size(); i++) {
+            if ((i < decl->defs.size() && decl->defs[i] == vd) || decl->names[i] == vd->name) {
+                s += ConstValueSuffix(decl, i, vd);
+                break;
+            }
+        }
+    }
+    
     return s;
 }
 
@@ -645,8 +707,9 @@ inline HoverText HoverIdent(const Located &loc, const Occurrence &occ) {
     }
     if (auto ci = ResolvedIdent(an, occ)) {
         if (ci->vdef) {
-            h.header = VarDefHeader(ci->vdef);
-            if (auto vd = an.VarDeclOf(ci->vdef)) h.doc = DocText(vd->doc);
+            auto vd = an.VarDeclOf(ci->vdef);
+            h.header = VarDefHeader(ci->vdef, vd);
+            if (vd) h.doc = DocText(vd->doc);
             auto types = an.TypesOf(occ.node, 4);
             if (types.size() > 1) {
                 h.extra = "// in other instantiations:";
@@ -798,8 +861,11 @@ inline HoverText HoverOf(const Located &loc, const Occurrence &occ) {
                 return x && x->defs.size() > i && x->defs[i] && x->defs[i]->type;
             });
             auto def = c ? Is<VarDecl>(c)->defs[i] : nullptr;
+            // The value suffix reads the checked node, so a folded
+            // initializer (e.g. -5, or an alias of another const) shows.
+            auto checked = c ? Is<VarDecl>(c) : vd;
             h.header = cat(VarKeyword(vd), vd->names[i], ": ",
-                           def ? TypeText(def->type) : vd->type ? TypeText(vd->type) : string("?"));
+                           def ? TypeText(def->type) : vd->type ? TypeText(vd->type) : string("?"), ConstValueSuffix(checked, i, def));
             h.doc = DocText(vd->doc);
             if (c) NoteExemplar(h, an, c);
             else if (!vd->isglobal) Append(h.doc, h.doc.empty() ? "" : "\n\n", NotChecked(an, occ.node));

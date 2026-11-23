@@ -32,7 +32,7 @@ fn main() {
     let f = add(1.5, 2.5);
     print(sum);
     print(f);
-    print(area(Shape.Square));
+    print(area(Shape.Square)); const_hover_more(); const_hover_local();
     print(helper::twice(sum));
     var v: i64[>..] = [];
     v.push(sum);
@@ -41,6 +41,45 @@ fn main() {
 
 // Called by nothing.
 fn spare(x) { x }
+// Const hover values: the initializer shows in the header.
+const HEX = 0xFF;
+const LONG = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+fn const_hover() {
+    const X, Y = 1, 2;
+    print(X);
+    print(Y);
+    print(HEX);
+    print(LONG);
+}
+// More const hover values: every literal kind, plus cases that show none.
+const F = 1.5;
+const B = true;
+const CH = 'a';
+const NEG = -5;
+const BIG = 18446744073709551615;
+const TEN = 10;
+const ALIAS = TEN;
+const E = Shape.Square;
+const P = Point { x: 1, y: 2 };
+const UNI = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaébbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+fn const_hover_more() {
+    print(ALIAS);
+    print(UNI);
+    let lit = 42;
+    print(lit);
+    print(NEG);
+}
+fn const_hover_local() {
+    const LNEG = -5;
+    const LALIAS = TEN;
+    const M, N = 1, "s";
+    print(LNEG);
+    print(LALIAS);
+    print(M);
+    print(N);
+}
 
 // lsp: hover 31:15 "fn add<T>(a: T, b: T) -> T"
 // lsp: hover 31:15 "Adds two numbers."
@@ -86,7 +125,7 @@ fn spare(x) { x }
 // lsp: definition 15:14 -> 15:8
 // lsp: references 31:15 3
 // lsp: references 15:8 4
-// lsp: references 10:5 3
+// lsp: references 10:5 4
 // lsp: references 18:5 2
 // lsp: references 24:16 3
 // lsp: references 22:9 2
@@ -125,6 +164,38 @@ fn spare(x) { x }
 // lsp: incoming 31:15 -> main@31,32
 // lsp: incoming 36:19 -> main@36
 // lsp: incoming 43:4 -> -
-// lsp: outgoing 29:4 -> add@31,32 area@35 twice@36
+// lsp: outgoing 29:4 -> add@31,32 area@35 twice@36 const_hover_more@35 const_hover_local@35
 // lsp: outgoing 22:4 -> -
 // lsp: incoming 33:11 -> none
+// lsp: hover 45:7 "const HEX: const i64 = 0xFF // 255"
+// lsp: hover 46:7 "const LONG: const u8[:] = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa...\""
+// lsp: hover 49:11 "const X: const i64 = 1"
+// lsp: hover 49:14 "const Y: const i64 = 2"
+// lsp: hover 50:11 "const X: const i64 = 1"
+// lsp: hover 51:11 "const Y: const i64 = 2"
+// lsp: hover 52:11 "const HEX: const i64 = 0xFF // 255"
+// lsp: hover 53:11 "const LONG: const u8[:] = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa...\""
+// lsp: hover 56:7 "const F: const f64 = 1.5"
+// lsp: hover 57:7 "const B: const bool = true"
+// lsp: hover 58:7 "const CH: const i64 = 'a' // 97"
+// lsp: hover 59:7 "const NEG: const i64 = -5"
+// lsp: hover 60:7 "const BIG: const u64 = 18446744073709551615"
+// lsp: hover 61:7 "const TEN: const i64 = 10"
+// lsp: hover 62:7 "const ALIAS: const i64 = 10"
+// A hover want ending in \n``` pins the whole header: anything appended to it (like a value) fails the match.
+// lsp: hover 63:7 "const E: const Shape\n```"
+// lsp: hover 64:7 "const P: const Point\n```"
+// lsp: hover 65:7 "const UNI: const u8[:] = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa...\""
+// lsp: hover 68:11 "const ALIAS: const i64 = 10"
+// lsp: hover 69:11 "const UNI: const u8[:] = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa...\""
+// lsp: hover 72:11 "const NEG: const i64 = -5"
+// lsp: hover 70:9 "let lit: i64\n```"
+// lsp: hover 71:11 "let lit: i64\n```"
+// lsp: hover 75:11 "const LNEG: const i64 = -5"
+// lsp: hover 76:11 "const LALIAS: const i64 = 10"
+// lsp: hover 77:11 "const M: const i64 = 1"
+// lsp: hover 77:14 "const N: const u8[:] = \"s\""
+// lsp: hover 78:11 "const LNEG: const i64 = -5"
+// lsp: hover 79:11 "const LALIAS: const i64 = 10"
+// lsp: hover 80:11 "const M: const i64 = 1"
+// lsp: hover 81:11 "const N: const u8[:] = \"s\""
