@@ -19,6 +19,7 @@
 #include <deque>
 #include <exception>
 #include <functional>
+#include <limits>
 #include <map>
 #include <memory>
 #include <mutex>

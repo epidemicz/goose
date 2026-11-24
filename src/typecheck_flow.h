@@ -2697,6 +2697,43 @@ inline void TypeCheck::CheckVarDecl(VarDecl *vd, bool global) {
         d->constfval = v.fval;
         d->constfrom = d->constlit ? v.constfrom : nullptr;
         Finish(d, ann ? ann : v.type, &v, vd->inits[i]);
+        if (vd->isconst && !vd->byref) {
+            auto dt = LoadType(d->type);
+            auto safeconst = !(v.constfrom && v.constfrom->refwrite);
+            if (IsIntT(dt)) {
+                if (v.notconst && safeconst) {
+                    d->hover.kind = ConstHover::INT;
+                    d->hover.ival = WrapStorage(~v.litlo, dt->intstorage);
+                    d->hover.uns = dt->intstorage == IS_U64 && d->hover.ival < 0;
+                } else if (v.ck == CK_INT && safeconst) {
+                    d->hover.kind = ConstHover::INT;
+                    d->hover.ival = v.ival;
+                    d->hover.uns = v.uns;
+                    d->hover.text = v.hover.text;
+                } else if (v.hover.kind == ConstHover::INT) {
+                    d->hover = v.hover;
+                }
+            } else if (dt->kind == TY_FLT) {
+                if (v.ck == CK_FLT && safeconst) {
+                    d->hover.kind = ConstHover::FLT;
+                    d->hover.fval = IsF32(dt) ? (double)(float)v.fval : v.fval;
+                    if (!IsF32(dt) || !std::isinf(d->hover.fval) || std::isinf(v.fval))
+                        d->hover.text = v.hover.text;
+                } else if (v.hover.kind == ConstHover::FLT) {
+                    d->hover = v.hover;
+                    if (IsF32(dt)) {
+                        d->hover.fval = (double)(float)d->hover.fval;
+                        if (std::isinf(d->hover.fval) && !std::isinf(v.hover.fval))
+                            d->hover.text = {};
+                    }
+                }
+            } else if (dt->kind == TY_BOOL && v.hover.kind == ConstHover::BOOL) {
+                d->hover = v.hover;
+            } else if ((dt->kind == TY_SLICE || dt->kind == TY_ARRAY) &&
+                       v.hover.kind == ConstHover::STR) {
+                d->hover = v.hover;
+            }
+        }
         auto len = Is<Dot>(vd->inits[i]);
         if (!vd->isvar && !global && len && len->member == B_LEN &&
             d->type->kind == TY_INT && d->type->intstorage == IS_I64)

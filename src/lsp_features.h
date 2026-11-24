@@ -198,48 +198,128 @@ inline const char *VarKeyword(const VarDecl *vd) { return vd->isconst ? "const "
 // Hover headers show at most this many bytes of a const string initializer.
 inline constexpr size_t kMaxConstStrHoverBytes = 64;
 
-// Truncate to at most max bytes without splitting a UTF-8 code point: back
-// off over continuation bytes, then drop the lead byte too if its sequence
-// would be cut short.
-inline string_view TruncateUtf8(string_view v, size_t max) {
-    if (v.size() <= max) return v;
-    size_t n = max;
-    while (n > 0 && (uint8_t(v[n - 1]) & 0xC0) == 0x80) n--;
-    if (n > 0) {
-        uint8_t lead = uint8_t(v[n - 1]);
-        size_t need = lead < 0x80 ? 1 : lead < 0xE0 ? 2 : lead < 0xF0 ? 3 : 4;
-        if (n - 1 + need > max) n--;
+// Length of the valid RFC 3629 UTF-8 sequence starting at v[i], or 0 when
+// v[i] is an invalid or truncated high byte (e.g. from a \xNN string escape).
+inline size_t ValidUtf8SeqLen(string_view v, size_t i) {
+    auto b0 = (uint8_t)v[i];
+    if (b0 < 0x80) return 1;
+    auto cont = [&](size_t j) { return j < v.size() && ((uint8_t)v[j] & 0xC0) == 0x80; };
+    if (b0 >= 0xC2 && b0 <= 0xDF && cont(i + 1)) return 2;
+    if (b0 >= 0xE0 && b0 <= 0xEF && cont(i + 1) && cont(i + 2)) {
+        auto b1 = (uint8_t)v[i + 1];
+        if ((b0 == 0xE0 && b1 < 0xA0) || (b0 == 0xED && b1 > 0x9F)) return 0;
+        return 3;
     }
-    return v.substr(0, n);
+    if (b0 >= 0xF0 && b0 <= 0xF4 && cont(i + 1) && cont(i + 2) && cont(i + 3)) {
+        auto b1 = (uint8_t)v[i + 1];
+        if ((b0 == 0xF0 && b1 < 0x90) || (b0 == 0xF4 && b1 > 0x8F)) return 0;
+        return 4;
+    }
+    return 0;
+}
+
+// Quote and escape a const string initializer for hover, truncating at a UTF-8
+// code-point boundary within max source bytes and escaping non-UTF-8 bytes as
+// \xNN so the JSON-RPC stream stays valid UTF-8.
+inline void AppendConstStrHover(string &out, string_view v, size_t max = kMaxConstStrHoverBytes) {
+    out += '"';
+    size_t i = 0;
+    auto truncated = false;
+    while (i < v.size()) {
+        auto len = ValidUtf8SeqLen(v, i);
+        size_t step = len ? len : 1;
+        if (i + step > max) {
+            truncated = true;
+            break;
+        }
+        if (len > 1) {
+            out.append(v.data() + i, len);
+        } else {
+            char c = v[i];
+            switch (c) {
+                case '\n': out += "\\n"; break;
+                case '\t': out += "\\t"; break;
+                case '\r': out += "\\r"; break;
+                case 0:    out += "\\0"; break;
+                case '\\': out += "\\\\"; break;
+                case '"':  out += "\\\""; break;
+                case '\'': out += "\\'"; break;
+                default:
+                    if (!len || (uint8_t)c < 0x20 || (uint8_t)c == 0x7F) {
+                        char buf[8];
+                        snprintf(buf, sizeof(buf), "\\x%02x", (uint8_t)c);
+                        out += buf;
+                    } else {
+                        out += c;
+                    }
+            }
+        }
+        i += step;
+    }
+    if (truncated) out += "...";
+    out += '"';
+}
+
+inline string FormatConstIntSuffix(int64_t val, bool uns, string_view text) {
+    auto dec = uns ? cat((uint64_t)val) : cat(val);
+    auto nondec = !text.empty() &&
+                  (text[0] == '\'' || text.rfind("0x", 0) == 0 || text.rfind("0X", 0) == 0);
+    if (nondec) return cat(" = ", text, " // ", dec);
+    return cat(" = ", !text.empty() ? string(text) : dec);
 }
 
 inline string ConstValueSuffix(const VarDecl *decl, size_t idx, const VarDef *def = nullptr) {
     if (!decl || !decl->isconst || decl->results) return {};
     if (decl->inits.size() != decl->names.size() || idx >= decl->inits.size()) return {};
+    // When typechecked, def->hover is authoritative and immune to post-check
+    // optimizer rewrites.
+    if (def) {
+        switch (def->hover.kind) {
+            case ConstHover::NONE:
+                return {};
+            case ConstHover::INT:
+                return FormatConstIntSuffix(def->hover.ival, def->hover.uns, def->hover.text);
+            case ConstHover::FLT:
+                return cat(" = ", !def->hover.text.empty() ? string(def->hover.text)
+                                                           : cat(def->hover.fval));
+            case ConstHover::BOOL:
+                return def->hover.bval ? " = true" : " = false";
+            case ConstHover::STR: {
+                string s = " = ";
+                AppendConstStrHover(s, def->hover.sval);
+                return s;
+            }
+        }
+        return {};
+    }
+    // Unchecked fallback (e.g. past the end of an exemplar instantiation): read
+    // literal source nodes compatible with the written annotation, if any.
     auto init = decl->inits[idx];
+    auto dt = decl->type;
     if (auto il = Is<IntLit>(init)) {
-        auto dec = il->uns ? cat((uint64_t)il->val) : cat(il->val);
-        if (!il->text.empty() && il->text != dec) return cat(" = ", il->text, " // ", dec);
-        return cat(" = ", dec);
+        if (!dt || (IsIntT(dt) && FitsIntStorage(il->val, il->uns, dt->intstorage)))
+            return FormatConstIntSuffix(il->val, il->uns, il->text);
+        if (dt->kind == TY_FLT) {
+            auto d = il->uns ? (double)(uint64_t)il->val : (double)il->val;
+            return cat(" = ", IsF32(dt) ? (double)(float)d : d);
+        }
+        return {};
     }
-    if (auto fl = Is<FltLit>(init))
-        return cat(" = ", !fl->text.empty() ? string(fl->text) : cat(fl->val));
-    if (auto bl = Is<BoolLit>(init))
-        return bl->val ? " = true" : " = false";
+    if (auto fl = Is<FltLit>(init)) {
+        if (!dt || dt->kind == TY_FLT)
+            return cat(" = ", !fl->text.empty() ? string(fl->text) : cat(fl->val));
+        return {};
+    }
+    if (auto bl = Is<BoolLit>(init)) {
+        if (!dt || dt->kind == TY_BOOL) return bl->val ? " = true" : " = false";
+        return {};
+    }
     if (auto sl = Is<StrLit>(init)) {
-        string s = " = ";
-        auto shown = TruncateUtf8(sl->val, kMaxConstStrHoverBytes);
-        EscapeString(s, shown.size() < sl->val.size() ? string_view(string(shown) + "...") : string_view(sl->val), '"');
-        return s;
-    }
-    // A folded value the checker computed, for initializers that are not
-    // themselves literals (e.g. -5, or an alias of another const). The
-    // VarDef carries it; its type says which field holds it. Unchecked
-    // VarDefs have no type, so they show nothing.
-    if (def && def->type) {
-        if (def->type->kind == TY_FLT) return cat(" = ", def->constfval);
-        if (IsIntT(def->type))
-            return cat(" = ", def->constuns ? cat((uint64_t)def->constval) : cat(def->constval));
+        if (!dt || dt->kind == TY_SLICE || dt->kind == TY_ARRAY) {
+            string s = " = ";
+            AppendConstStrHover(s, sl->val);
+            return s;
+        }
     }
     return {};
 }
@@ -248,9 +328,9 @@ inline string VarDefHeader(const VarDef *vd, const VarDecl *decl = nullptr) {
     auto s = decl ? string(VarKeyword(decl))
                   : vd->isparam ? cat("parameter ", vd->isvar ? "var " : "")
                                 : string(vd->isvar ? "var " : "let ");
-                                
+
     Append(s, vd->name, ": ", TypeText(vd->type));
-    
+
     if (decl) {
         for (size_t i = 0; i < decl->names.size(); i++) {
             if ((i < decl->defs.size() && decl->defs[i] == vd) || decl->names[i] == vd->name) {
@@ -259,7 +339,7 @@ inline string VarDefHeader(const VarDef *vd, const VarDecl *decl = nullptr) {
             }
         }
     }
-    
+
     return s;
 }
 
@@ -861,11 +941,9 @@ inline HoverText HoverOf(const Located &loc, const Occurrence &occ) {
                 return x && x->defs.size() > i && x->defs[i] && x->defs[i]->type;
             });
             auto def = c ? Is<VarDecl>(c)->defs[i] : nullptr;
-            // The value suffix reads the checked node, so a folded
-            // initializer (e.g. -5, or an alias of another const) shows.
-            auto checked = c ? Is<VarDecl>(c) : vd;
             h.header = cat(VarKeyword(vd), vd->names[i], ": ",
-                           def ? TypeText(def->type) : vd->type ? TypeText(vd->type) : string("?"), ConstValueSuffix(checked, i, def));
+                           def ? TypeText(def->type) : vd->type ? TypeText(vd->type) : string("?"),
+                           ConstValueSuffix(vd, i, def));
             h.doc = DocText(vd->doc);
             if (c) NoteExemplar(h, an, c);
             else if (!vd->isglobal) Append(h.doc, h.doc.empty() ? "" : "\n\n", NotChecked(an, occ.node));

@@ -78,7 +78,7 @@ fn const_hover_local() {
     print(LNEG);
     print(LALIAS);
     print(M);
-    print(N);
+    print(N); const_hover_edges(1, 2.5);
 }
 
 // lsp: hover 31:15 "fn add<T>(a: T, b: T) -> T"
@@ -199,3 +199,144 @@ fn const_hover_local() {
 // lsp: hover 79:11 "const LALIAS: const i64 = 10"
 // lsp: hover 80:11 "const M: const i64 = 1"
 // lsp: hover 81:11 "const N: const u8[:] = \"s\""
+
+fn inline_candidate(x: i64) -> i64 { x * 2 + 1 }
+
+const G_TYPED: i64 = 10;
+const G_ALIAS = G_TYPED;
+const G_HEX_ALIAS = HEX;
+const G_MILLION = 1_000_000;
+const G_U8_NOT:     u8  = ~4;
+const G_U64_NOT:    u64 = ~4;
+const G_F_FROM_HEX: f64 = 0xFF;
+const G_F_FROM_INT: f64 = 5;
+const G_F_TYPED:    f64 = 1.5;
+const G_F_ALIAS = G_F_TYPED;
+const G_INF = 1.0 / 0.0;
+const G_B_NOT = !B;
+const G_B_ALIAS = B;
+const G_STR = "hello";
+const G_STR_ALIAS = G_STR;
+const G_PNG = "\x89PNG\r\n\x1a\n";
+const G_UNI_EXACT2 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaébbb";
+const G_UNI_MID3 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa€bbb";
+const G_UNI_EXACT4 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa🦆bbb";
+const G_UNI_MID4 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa🦆bbb";
+const G_INL = inline_candidate(3);
+
+fn const_hover_edges(x: i64, y: f64) {
+    var rv: i64[>..] = [];
+    rv.push(x);
+    const L_RT_LEN = rv.len;
+    const L_RT_INT = x + 1;
+    const L_RT_FLT = y * 2.0;
+    const L_INL = inline_candidate(3);
+    const L1 = 10;
+    const L2 = L1;
+    const LF1: f64 = 1.5;
+    const LF2 = LF1;
+    const LB1 = true;
+    const LB2 = LB1;
+    const LB3 = !LB1;
+    const LS1 = "abc";
+    const LS2 = LS1;
+    const LU8: u8  = ~4;
+    const LHF: f64 = 0xFF;
+    const for <CS> in ["alpha", "beta"] {
+        const CF = CS;
+        print(CF);
+    }
+    print(G_TYPED);
+    print(G_ALIAS);
+    print(G_HEX_ALIAS);
+    print(G_MILLION);
+    print(G_U8_NOT);
+    print(G_U64_NOT);
+    print(G_F_FROM_HEX);
+    print(G_F_FROM_INT);
+    print(G_F_ALIAS);
+    print(G_INF);
+    print(G_B_NOT);
+    print(G_B_ALIAS);
+    print(G_STR_ALIAS);
+    print(G_PNG);
+    print(G_UNI_EXACT2);
+    print(G_UNI_MID3);
+    print(G_UNI_EXACT4);
+    print(G_UNI_MID4);
+    print(G_INL);
+    print(L_RT_LEN);
+    print(L_RT_INT);
+    print(L_RT_FLT);
+    print(L_INL);
+    print(L2);
+    print(LF2);
+    print(LB2);
+    print(LB3);
+    print(LS2);
+    print(LU8);
+    print(LHF);
+}
+
+// lsp: hover 205:7 "const G_TYPED: const i64 = 10\n```"
+// lsp: hover 206:7 "const G_ALIAS: const i64 = 10\n```"
+// lsp: hover 207:7 "const G_HEX_ALIAS: const i64 = 255\n```"
+// lsp: hover 208:7 "const G_MILLION: const i64 = 1_000_000\n```"
+// lsp: hover 209:7 "const G_U8_NOT: const u8 = 251\n```"
+// lsp: hover 210:7 "const G_U64_NOT: const u64 = 18446744073709551611\n```"
+// lsp: hover 211:7 "const G_F_FROM_HEX: const f64 = 255.0\n```"
+// lsp: hover 212:7 "const G_F_FROM_INT: const f64 = 5.0\n```"
+// lsp: hover 214:7 "const G_F_ALIAS: const f64 = 1.5\n```"
+// lsp: hover 215:7 "const G_INF: const f64 = inf\n```"
+// lsp: hover 216:7 "const G_B_NOT: const bool = false\n```"
+// lsp: hover 217:7 "const G_B_ALIAS: const bool = true\n```"
+// lsp: hover 219:7 "const G_STR_ALIAS: const u8[:] = \"hello\"\n```"
+// lsp: hover 220:7 "const G_PNG: const u8[:] = \"\\x89PNG\\r\\n\\x1a\\n\"\n```"
+// lsp: hover 221:7 "const G_UNI_EXACT2: const u8[:] = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaé...\"\n```"
+// lsp: hover 222:7 "const G_UNI_MID3: const u8[:] = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa...\"\n```"
+// lsp: hover 223:7 "const G_UNI_EXACT4: const u8[:] = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa🦆...\"\n```"
+// lsp: hover 224:7 "const G_UNI_MID4: const u8[:] = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa...\"\n```"
+// lsp: hover 225:7 "const G_INL: const i64\n```"
+// lsp: hover 230:11 "const L_RT_LEN: const i64\n```"
+// lsp: hover 231:11 "const L_RT_INT: const i64\n```"
+// lsp: hover 232:11 "const L_RT_FLT: const f64\n```"
+// lsp: hover 233:11 "const L_INL: const i64\n```"
+// lsp: hover 235:11 "const L2: const i64 = 10\n```"
+// lsp: hover 237:11 "const LF2: const f64 = 1.5\n```"
+// lsp: hover 239:11 "const LB2: const bool = true\n```"
+// lsp: hover 240:11 "const LB3: const bool = false\n```"
+// lsp: hover 242:11 "const LS2: const u8[:] = \"abc\"\n```"
+// lsp: hover 243:11 "const LU8: const u8 = 251\n```"
+// lsp: hover 244:11 "const LHF: const f64 = 255.0\n```"
+// lsp: hover 246:15 "const CF: const u8[:] = \"alpha\"\n```"
+// lsp: hover 247:15 "const CF: const u8[:] = \"alpha\"\n```"
+// lsp: hover 249:11 "const G_TYPED: const i64 = 10\n```"
+// lsp: hover 250:11 "const G_ALIAS: const i64 = 10\n```"
+// lsp: hover 251:11 "const G_HEX_ALIAS: const i64 = 255\n```"
+// lsp: hover 252:11 "const G_MILLION: const i64 = 1_000_000\n```"
+// lsp: hover 253:11 "const G_U8_NOT: const u8 = 251\n```"
+// lsp: hover 254:11 "const G_U64_NOT: const u64 = 18446744073709551611\n```"
+// lsp: hover 255:11 "const G_F_FROM_HEX: const f64 = 255.0\n```"
+// lsp: hover 256:11 "const G_F_FROM_INT: const f64 = 5.0\n```"
+// lsp: hover 257:11 "const G_F_ALIAS: const f64 = 1.5\n```"
+// lsp: hover 258:11 "const G_INF: const f64 = inf\n```"
+// lsp: hover 259:11 "const G_B_NOT: const bool = false\n```"
+// lsp: hover 260:11 "const G_B_ALIAS: const bool = true\n```"
+// lsp: hover 261:11 "const G_STR_ALIAS: const u8[:] = \"hello\"\n```"
+// lsp: hover 262:11 "const G_PNG: const u8[:] = \"\\x89PNG\\r\\n\\x1a\\n\"\n```"
+// lsp: hover 263:11 "const G_UNI_EXACT2: const u8[:] = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaé...\"\n```"
+// lsp: hover 264:11 "const G_UNI_MID3: const u8[:] = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa...\"\n```"
+// lsp: hover 265:11 "const G_UNI_EXACT4: const u8[:] = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa🦆...\"\n```"
+// lsp: hover 266:11 "const G_UNI_MID4: const u8[:] = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa...\"\n```"
+// lsp: hover 267:11 "const G_INL: const i64\n```"
+// lsp: hover 268:11 "const L_RT_LEN: const i64\n```"
+// lsp: hover 269:11 "const L_RT_INT: const i64\n```"
+// lsp: hover 270:11 "const L_RT_FLT: const f64\n```"
+// lsp: hover 271:11 "const L_INL: const i64\n```"
+// lsp: hover 272:11 "const L2: const i64 = 10\n```"
+// lsp: hover 273:11 "const LF2: const f64 = 1.5\n```"
+// lsp: hover 274:11 "const LB2: const bool = true\n```"
+// lsp: hover 275:11 "const LB3: const bool = false\n```"
+// lsp: hover 276:11 "const LS2: const u8[:] = \"abc\"\n```"
+// lsp: hover 277:11 "const LU8: const u8 = 251\n```"
+// lsp: hover 278:11 "const LHF: const f64 = 255.0\n```"

@@ -685,6 +685,20 @@ struct Prov : Roots {
     const Roots &AsRoots() const { return *this; }
 };
 
+// Folded scalar constant value recorded during TypeCheck for LSP `const`
+// hover, separate from `Val::ck` / `VarDef::constlit` (which govern literal
+// adaptation) and independent of post-check Optimizer mutations.
+struct ConstHover {
+    enum Kind : uint8_t { NONE, INT, FLT, BOOL, STR };
+    Kind kind = NONE;
+    bool uns = false;
+    int64_t ival = 0;
+    double fval = 0;
+    bool bval = false;
+    string_view sval;
+    string_view text;   // Original literal spelling for IntLit/FltLit.
+};
+
 // The checked value of an expression (typecheck.h): its type, where it
 // points when it is a reference or slice, and the constant folding used for
 // literal fit and array sizes. Lives here because every node's Check
@@ -804,6 +818,7 @@ struct Val : Prov {
     // any of several, or anywhere a root only bounds (TypeCheck::HolderSource).
     VarDef *holderfrom = nullptr;
     FnValBind fnv;               // When type is TY_FN.
+    ConstHover hover;            // Folded scalar constant for LSP `const` hover.
 };
 
 // ---------------------------------------------------------------------------
@@ -1751,6 +1766,7 @@ struct VarDef {
     bool constflt = false;      // A float constant, of value constfval.
     double constfval = 0;
     VarDef *constfrom = nullptr;    // The initializer's Val::constfrom.
+    ConstHover hover;           // Folded scalar constant of a `const` binding.
     // A `let` initialized to exactly `X.len` (§5.2): the path X, as checked
     // there. Resizing the same X back to it is a balanced shrink.
     Node *markof = nullptr;
