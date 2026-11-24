@@ -2090,11 +2090,6 @@ inline Val TypeCheck::NumericBinary(Binary *b, Val lv, Val rv, TypeExpr *&ct, bo
             if (ct->kind == TY_INT) {
                 if (!fold(v)) return Val {};
                 flexint(v, false);
-                if (v.ck == CK_INT) {
-                    v.hover.kind = ConstHover::INT;
-                    v.hover.ival = v.ival;
-                    v.hover.uns = v.uns;
-                }
             } else if (lv.ck == CK_FLT && rv.ck == CK_FLT && op != T_MOD) {
                 // % (fmod) is left to the runtime.
                 auto x = lv.fval, y = rv.fval;
@@ -2106,14 +2101,12 @@ inline Val TypeCheck::NumericBinary(Binary *b, Val lv, Val rv, TypeExpr *&ct, bo
                     case T_MUL:   v.fval = x * y; break;
                     default:
                         v.fval = y != 0 ? x / y
-                               : x == 0 ? numeric_limits<double>::quiet_NaN()
+                               : (x == 0 || std::isnan(x)) ? numeric_limits<double>::quiet_NaN()
                                : (signbit(x) != signbit(y) ? -1.0 : 1.0) *
                                  numeric_limits<double>::infinity();
                         break;
                 }
                 if (IsF32(ct)) v.fval = (double)(float)v.fval;
-                v.hover.kind = ConstHover::FLT;
-                v.hover.fval = v.fval;
             }
             v.litfloat = flex && v.ck != CK_FLT;
             if (!trial) b->litfloat = v.litfloat;
@@ -2161,8 +2154,6 @@ inline Val TypeCheck::NumericUnary(Unary *u, const Val &cv, bool trial) {
                     r.ck = CK_INT;
                     r.ival = v.uns ? INT64_MIN : -v.ival;
                     r.constfrom = v.constfrom;
-                    r.hover.kind = ConstHover::INT;
-                    r.hover.ival = r.ival;
                     if (!trial) u->child->exprtype = r.type;
                     return r;
                 }
@@ -2175,8 +2166,6 @@ inline Val TypeCheck::NumericUnary(Unary *u, const Val &cv, bool trial) {
                 if (v.ck == CK_FLT) {
                     r.ck = CK_FLT;
                     r.fval = -v.fval;
-                    r.hover.kind = ConstHover::FLT;
-                    r.hover.fval = r.fval;
                 } else {
                     r.litfloat = LitFloat(v);
                 }
@@ -2203,8 +2192,6 @@ inline Val TypeCheck::NumericUnary(Unary *u, const Val &cv, bool trial) {
                 r.flexint = r.notconst = true;
                 r.litlo = r.lithi = v.ival;
                 r.constfrom = v.constfrom;
-                r.hover.kind = ConstHover::INT;
-                r.hover.ival = ~v.ival;
                 if (!trial) {
                     u->child->exprtype = r.type;
                     u->flexint = true;
@@ -2217,9 +2204,6 @@ inline Val TypeCheck::NumericUnary(Unary *u, const Val &cv, bool trial) {
                 r.ival = ~v.ival;
                 r.uns = v.uns && r.ival < 0;
                 r.constfrom = v.constfrom;
-                r.hover.kind = ConstHover::INT;
-                r.hover.ival = r.ival;
-                r.hover.uns = r.uns;
                 if (!trial) u->child->exprtype = r.type;
                 return r;
             }
@@ -2246,17 +2230,22 @@ inline void TypeCheck::IntToFloat(Val &v, TypeExpr *ft) {
         v.fval = v.uns ? (double)(uint64_t)v.ival : (double)v.ival;
         if (IsF32(ft)) v.fval = v.uns ? (double)(float)(uint64_t)v.ival : (double)(float)v.ival;
         v.uns = false;
+        v.hover = {};
+    } else if (v.notconst) {
+        auto d = (double)(~v.litlo);
+        v.hover = {};
         v.hover.kind = ConstHover::FLT;
-        v.hover.fval = v.fval;
-        v.hover.text = {};
+        v.hover.isf32 = IsF32(ft);
+        v.hover.fval = v.hover.isf32 ? (double)(float)d : d;
+        v.hover.constfrom = v.constfrom;
     } else if (v.hover.kind == ConstHover::INT) {
+        auto d = v.hover.uns ? (double)(uint64_t)v.hover.ival : (double)v.hover.ival;
+        auto from = v.hover.constfrom;
+        v.hover = {};
         v.hover.kind = ConstHover::FLT;
-        v.hover.fval = v.hover.uns ? (double)(uint64_t)v.hover.ival : (double)v.hover.ival;
-        if (IsF32(ft))
-            v.hover.fval = v.hover.uns ? (double)(float)(uint64_t)v.hover.ival
-                                       : (double)(float)v.hover.ival;
-        v.hover.uns = false;
-        v.hover.text = {};
+        v.hover.isf32 = IsF32(ft);
+        v.hover.fval = v.hover.isf32 ? (double)(float)d : d;
+        v.hover.constfrom = from;
     }
     v.unsized = false;
     v.unsizedparam = nullptr;

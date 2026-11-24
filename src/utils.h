@@ -14,12 +14,12 @@ inline void CatOne(string &s, bool v)          { s += v ? "true" : "false"; }
 // overloads leaves it ambiguous on one platform or the other.
 template<typename T> requires (is_integral_v<T> && !is_same_v<T, char> && !is_same_v<T, bool>)
 void CatOne(string &s, T v)                    { s += to_string(v); }
-inline void CatOne(string &s, double v) {
+template<typename T> inline void CatFloat(string &s, T v) {
     // The spellings Goose programs print (§3.7), whatever the C library's.
     if (v != v) { s += "nan"; return; }
     if (std::isinf(v)) { s += v > 0 ? "inf" : "-inf"; return; }
-    // The runtime's text (gs_fmt_f64): the fewest significant digits that
-    // read back as v and the nearest of those, which to_chars finds as well,
+    // The runtime's text (gs_fmt_f64 / gs_fmt_f32): the fewest significant digits
+    // that read back as v and the nearest of those, which to_chars finds as well,
     // laid out as %g lays them out at a precision of max(15, digits): in
     // exponent form below 1e-4 or from that power of ten up, else
     // positionally, with .0 on a whole number.
@@ -42,6 +42,11 @@ inline void CatOne(string &s, double v) {
     if (n < x + 1) s.append(x + 1 - n, '0');
     s += '.';
     s += n > x + 1 ? dig.substr(x + 1) : "0";
+}
+inline void CatOne(string &s, double v) { CatFloat(s, v); }
+
+inline bool F32ChangedMagnitude(double raw, double narrowed) {
+    return (std::isinf(narrowed) && !std::isinf(raw)) || (narrowed == 0.0 && raw != 0.0);
 }
 
 template<typename... Ts> void Append(string &s, const Ts &...args) {

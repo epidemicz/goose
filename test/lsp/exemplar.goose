@@ -79,6 +79,7 @@ fn main() {
 // lsp: complete 49:19 lacks len
 // lsp: complete 49:19 lacks x
 
+var ex_arr: i64[>..] = [];
 fn exemplar_consts<T>(x: T, n: i64) -> i64 {
     const EX_K = 10;
     const EX_ALIAS = EX_K;
@@ -90,15 +91,25 @@ fn exemplar_consts<T>(x: T, n: i64) -> i64 {
     let stop: i64 = x;
     const UNCHK_LIT = 42;
     const UNCHK_FLT: f64 = 5;
+    const UNCHK_BYREF .= 5;
+    const UNCHK_BAD_STR: i64[:] = "oops";
+    const UNCHK_F32_OVF: f32    = 1e300;
+    const UNCHK_F32_UND: f32    = 1e-50;
+    const UNCHK_IX: u32 in ex_arr = 1;
     stop
 }
 
-// lsp: hover 83:11 "const EX_K: const i64 = 10\n```"
-// lsp: hover 84:11 "const EX_ALIAS: const i64 = 10\n```"
-// lsp: hover 85:11 "const EX_RT: const i64\n```"
-// lsp: hover 86:11 "const EX_OPQ: const T\n```"
-// lsp: hover 87:11 "const EX_ALIAS: const i64 = 10\n```"
-// lsp: hover 88:11 "const EX_RT: const i64\n```"
-// lsp: hover 89:11 "const EX_OPQ: const T\n```"
-// lsp: hover 91:11 "const UNCHK_LIT: ? = 42\n```"
-// lsp: hover 92:11 "const UNCHK_FLT: f64 = 5.0\n```"
+// lsp: hover 84:11 "const EX_K: const i64 = 10\n```"
+// lsp: hover 85:11 "const EX_ALIAS: const i64 = 10\n```"
+// lsp: hover 86:11 "const EX_RT: const i64\n```"
+// lsp: hover 87:11 "const EX_OPQ: const T\n```"
+// lsp: hover 88:11 "const EX_ALIAS: const i64 = 10\n```"
+// lsp: hover 89:11 "const EX_RT: const i64\n```"
+// lsp: hover 90:11 "const EX_OPQ: const T\n```"
+// lsp: hover 92:11 "const UNCHK_LIT: ? = 42\n```"
+// lsp: hover 93:11 "const UNCHK_FLT: f64 = 5.0\n```"
+// lsp: hover 94:11 "const UNCHK_BYREF: ?\n```"
+// lsp: hover 95:11 "const UNCHK_BAD_STR: i64[:]\n```"
+// lsp: hover 96:11 "const UNCHK_F32_OVF: f32 = inf\n```"
+// lsp: hover 97:11 "const UNCHK_F32_UND: f32 = 0.0\n```"
+// lsp: hover 98:11 "const UNCHK_IX: u32 in ex_arr\n```"

@@ -269,24 +269,30 @@ inline string FormatConstIntSuffix(int64_t val, bool uns, string_view text) {
 }
 
 inline string ConstValueSuffix(const VarDecl *decl, size_t idx, const VarDef *def = nullptr) {
-    if (!decl || !decl->isconst || decl->results) return {};
+    if (!decl || !decl->isconst || decl->byref || decl->results) return {};
     if (decl->inits.size() != decl->names.size() || idx >= decl->inits.size()) return {};
     // When typechecked, def->hover is authoritative and immune to post-check
     // optimizer rewrites.
     if (def) {
+        for (auto p = def->hover.constfrom; p; p = p->constfrom ? p->constfrom : p->hover.constfrom)
+            if (p->refwrite) return {};
         switch (def->hover.kind) {
             case ConstHover::NONE:
                 return {};
             case ConstHover::INT:
                 return FormatConstIntSuffix(def->hover.ival, def->hover.uns, def->hover.text);
-            case ConstHover::FLT:
-                return cat(" = ", !def->hover.text.empty() ? string(def->hover.text)
-                                                           : cat(def->hover.fval));
+            case ConstHover::FLT: {
+                if (!def->hover.text.empty()) return cat(" = ", def->hover.text);
+                string s = " = ";
+                if (def->hover.isf32) CatFloat(s, (float)def->hover.fval);
+                else CatFloat(s, def->hover.fval);
+                return s;
+            }
             case ConstHover::BOOL:
                 return def->hover.bval ? " = true" : " = false";
             case ConstHover::STR: {
                 string s = " = ";
-                AppendConstStrHover(s, def->hover.sval);
+                AppendConstStrHover(s, def->hover.text);
                 return s;
             }
         }
@@ -297,17 +303,29 @@ inline string ConstValueSuffix(const VarDecl *decl, size_t idx, const VarDef *de
     auto init = decl->inits[idx];
     auto dt = decl->type;
     if (auto il = Is<IntLit>(init)) {
-        if (!dt || (IsIntT(dt) && FitsIntStorage(il->val, il->uns, dt->intstorage)))
+        if (!dt || (IsIntT(dt) && !dt->ix && FitsIntStorage(il->val, il->uns, dt->intstorage)))
             return FormatConstIntSuffix(il->val, il->uns, il->text);
         if (dt->kind == TY_FLT) {
             auto d = il->uns ? (double)(uint64_t)il->val : (double)il->val;
-            return cat(" = ", IsF32(dt) ? (double)(float)d : d);
+            string s = " = ";
+            if (IsF32(dt)) CatFloat(s, (float)d);
+            else CatFloat(s, d);
+            return s;
         }
         return {};
     }
     if (auto fl = Is<FltLit>(init)) {
-        if (!dt || dt->kind == TY_FLT)
+        if (!dt || dt->kind == TY_FLT) {
+            if (dt && IsF32(dt)) {
+                auto narrowed = (double)(float)fl->val;
+                if (!fl->text.empty() && !F32ChangedMagnitude(fl->val, narrowed))
+                    return cat(" = ", fl->text);
+                string s = " = ";
+                CatFloat(s, (float)fl->val);
+                return s;
+            }
             return cat(" = ", !fl->text.empty() ? string(fl->text) : cat(fl->val));
+        }
         return {};
     }
     if (auto bl = Is<BoolLit>(init)) {
@@ -315,7 +333,8 @@ inline string ConstValueSuffix(const VarDecl *decl, size_t idx, const VarDef *de
         return {};
     }
     if (auto sl = Is<StrLit>(init)) {
-        if (!dt || dt->kind == TY_SLICE || dt->kind == TY_ARRAY) {
+        if (!dt || (dt->kind == TY_SLICE && dt->sub && IsU8(dt->sub)) ||
+            (dt->kind == TY_ARRAY && dt->arr && dt->arr->sub && IsU8(dt->arr->sub))) {
             string s = " = ";
             AppendConstStrHover(s, sl->val);
             return s;

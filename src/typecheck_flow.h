@@ -2699,37 +2699,45 @@ inline void TypeCheck::CheckVarDecl(VarDecl *vd, bool global) {
         Finish(d, ann ? ann : v.type, &v, vd->inits[i]);
         if (vd->isconst && !vd->byref) {
             auto dt = LoadType(d->type);
-            auto safeconst = !(v.constfrom && v.constfrom->refwrite);
-            if (IsIntT(dt)) {
-                if (v.notconst && safeconst) {
+            if (IsIntT(dt) && !dt->ix) {
+                if (v.notconst) {
                     d->hover.kind = ConstHover::INT;
                     d->hover.ival = WrapStorage(~v.litlo, dt->intstorage);
                     d->hover.uns = dt->intstorage == IS_U64 && d->hover.ival < 0;
-                } else if (v.ck == CK_INT && safeconst) {
+                    d->hover.constfrom = v.constfrom;
+                } else if (v.ck == CK_INT) {
                     d->hover.kind = ConstHover::INT;
                     d->hover.ival = v.ival;
                     d->hover.uns = v.uns;
-                    d->hover.text = v.hover.text;
+                    d->hover.text = v.hover.kind == ConstHover::INT ? v.hover.text : string_view {};
+                    d->hover.constfrom = v.constfrom;
                 } else if (v.hover.kind == ConstHover::INT) {
                     d->hover = v.hover;
+                    if (!d->hover.constfrom) d->hover.constfrom = v.constfrom;
                 }
             } else if (dt->kind == TY_FLT) {
-                if (v.ck == CK_FLT && safeconst) {
+                if (v.ck == CK_FLT) {
                     d->hover.kind = ConstHover::FLT;
-                    d->hover.fval = IsF32(dt) ? (double)(float)v.fval : v.fval;
-                    if (!IsF32(dt) || !std::isinf(d->hover.fval) || std::isinf(v.fval))
+                    d->hover.isf32 = IsF32(dt);
+                    d->hover.fval = d->hover.isf32 ? (double)(float)v.fval : v.fval;
+                    if (v.hover.kind == ConstHover::FLT &&
+                        (!d->hover.isf32 || !F32ChangedMagnitude(v.fval, d->hover.fval)))
                         d->hover.text = v.hover.text;
+                    d->hover.constfrom = v.constfrom;
                 } else if (v.hover.kind == ConstHover::FLT) {
                     d->hover = v.hover;
-                    if (IsF32(dt)) {
-                        d->hover.fval = (double)(float)d->hover.fval;
-                        if (std::isinf(d->hover.fval) && !std::isinf(v.hover.fval))
-                            d->hover.text = {};
+                    d->hover.isf32 = IsF32(dt);
+                    if (d->hover.isf32) {
+                        auto raw = d->hover.fval;
+                        d->hover.fval = (double)(float)raw;
+                        if (F32ChangedMagnitude(raw, d->hover.fval)) d->hover.text = {};
                     }
+                    if (!d->hover.constfrom) d->hover.constfrom = v.constfrom;
                 }
             } else if (dt->kind == TY_BOOL && v.hover.kind == ConstHover::BOOL) {
                 d->hover = v.hover;
-            } else if ((dt->kind == TY_SLICE || dt->kind == TY_ARRAY) &&
+            } else if (((dt->kind == TY_SLICE && dt->sub && IsU8(dt->sub)) ||
+                        (dt->kind == TY_ARRAY && dt->arr && dt->arr->sub && IsU8(dt->arr->sub))) &&
                        v.hover.kind == ConstHover::STR) {
                 d->hover = v.hover;
             }

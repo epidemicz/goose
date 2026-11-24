@@ -691,12 +691,15 @@ struct Prov : Roots {
 struct ConstHover {
     enum Kind : uint8_t { NONE, INT, FLT, BOOL, STR };
     Kind kind = NONE;
-    bool uns = false;
-    int64_t ival = 0;
-    double fval = 0;
-    bool bval = false;
-    string_view sval;
-    string_view text;   // Original literal spelling for IntLit/FltLit.
+    bool uns = false;      // INT: bits are a u64 above i64.max.
+    bool bval = false;     // BOOL: value.
+    bool isf32 = false;    // FLT: f32 storage width (format with float digits).
+    union {
+        int64_t ival = 0;
+        double fval;
+    };
+    string_view text;      // STR: string bytes; INT/FLT: original literal spelling (empty if folded/alias).
+    const VarDef *constfrom = nullptr;  // Named constant chain to check for refwrite at hover time.
 };
 
 // The checked value of an expression (typecheck.h): its type, where it

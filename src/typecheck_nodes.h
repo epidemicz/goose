@@ -26,8 +26,9 @@ inline Val FltLit::Check(TypeCheck &tc, TypeExpr *) {
     Val v;
     v.type = tc.ast.flttypes[FS_F64];
     v.hover.kind = ConstHover::FLT;
-    v.hover.fval = fixedtype && IsF32(fixedtype) ? (double)(float)val : val;
-    if (!fixedtype || !IsF32(fixedtype) || !std::isinf(v.hover.fval) || std::isinf(val))
+    v.hover.isf32 = fixedtype && IsF32(fixedtype);
+    v.hover.fval = v.hover.isf32 ? (double)(float)val : val;
+    if (!v.hover.isf32 || !F32ChangedMagnitude(val, v.hover.fval))
         v.hover.text = text;
     if (fixedtype) { v.type = fixedtype; return v; }
     v.ck = CK_FLT;
@@ -66,7 +67,7 @@ inline Val StrLit::Check(TypeCheck &tc, TypeExpr *expected) {
     Val v;
     v.strlit = true;
     v.hover.kind = ConstHover::STR;
-    v.hover.sval = val;
+    v.hover.text = val;
     v.Set(nullptr, true);   // Static data owns what it holds.
     v.writable = false;
     if (expected) {
@@ -155,7 +156,7 @@ inline Val Ident::Check(TypeCheck &tc, TypeExpr *) {
         }
         if (!vd->unsized && vd->hover.kind != ConstHover::NONE) {
             v.hover = vd->hover;
-            v.hover.text = {};
+            if (v.hover.kind != ConstHover::STR) v.hover.text = {};
         }
         return v;
     }
@@ -439,6 +440,7 @@ inline Val Unary::Check(TypeCheck &tc, TypeExpr *) {
         if (v.hover.kind == ConstHover::BOOL) {
             r.hover.kind = ConstHover::BOOL;
             r.hover.bval = !v.hover.bval;
+            r.hover.constfrom = v.hover.constfrom;
         }
         return r;
     }

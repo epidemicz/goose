@@ -275,7 +275,7 @@ fn const_hover_edges(x: i64, y: f64) {
     print(LB3);
     print(LS2);
     print(LU8);
-    print(LHF);
+    print(LHF); early_mut_check(); const_hover_mut_and_edges();
 }
 
 // lsp: hover 205:7 "const G_TYPED: const i64 = 10\n```"
@@ -340,3 +340,113 @@ fn const_hover_edges(x: i64, y: f64) {
 // lsp: hover 276:11 "const LS2: const u8[:] = \"abc\"\n```"
 // lsp: hover 277:11 "const LU8: const u8 = 251\n```"
 // lsp: hover 278:11 "const LHF: const f64 = 255.0\n```"
+
+let M_INT = 4;
+let UNMUT_G = 12;
+fn bump_i(r: i64&) { r = 99; }
+fn bump_f(r: f64&) { r = 9.5; }
+const G_NAN2 = (0.0 / 0.0) / 0.0;
+const G_NINF = -1.0 / 0.0;
+const G_SHL = 1 << 8;
+const G_AND = 0xFF & 0x0F;
+const G_F32_P1: f32 = 0.1;
+const G_F32_ALIAS = G_F32_P1;
+const G_F32_WIDEN: f64 = G_F32_P1;
+const G_F32_OVF:   f32 = 1e300;
+const G_F32_UND:   f32 = 1e-50;
+const C_UNMUT = UNMUT_G + 3;
+
+fn early_mut_check() {
+    const C_EARLY = M_INT;
+    print(C_EARLY);
+}
+
+fn const_hover_mut_and_edges() {
+    bump_i(M_INT);
+    const C_M_DIRECT = M_INT;
+    const C_M_ADD = M_INT + 1;
+    const C_M_OR = M_INT | 2;
+    const C_M_SHL = M_INT << 1;
+    const C_M_NEG = -M_INT;
+    const C_M_NOT = ~M_INT;
+    const C_M_FLT:   f64 = M_INT;
+    const C_M_FNOT:  f64 = ~M_INT;
+    const C_M_TYPED: i64 = C_M_DIRECT;
+    const C_M_ALIAS = C_M_TYPED;
+    let mf_a = 1.5;
+    bump_f(mf_a);
+    let mf_b = mf_a;
+    const C_MF_CHAIN = mf_b;
+    const C_MF_NEG = -mf_a;
+    const C_MF_ADD = mf_a + 1.0;
+    print(G_NAN2);
+    print(G_NINF);
+    print(G_SHL);
+    print(G_AND);
+    print(G_F32_P1);
+    print(G_F32_ALIAS);
+    print(G_F32_WIDEN);
+    print(G_F32_OVF);
+    print(G_F32_UND);
+    print(C_UNMUT);
+    print(C_M_DIRECT);
+    print(C_M_ADD);
+    print(C_M_OR);
+    print(C_M_SHL);
+    print(C_M_NEG);
+    print(C_M_NOT);
+    print(C_M_FLT);
+    print(C_M_FNOT);
+    print(C_M_ALIAS);
+    print(C_MF_CHAIN);
+    print(C_MF_NEG);
+    print(C_MF_ADD);
+}
+
+// lsp: hover 348:7 "const G_NAN2: const f64 = nan\n```"
+// lsp: hover 349:7 "const G_NINF: const f64 = -inf\n```"
+// lsp: hover 350:7 "const G_SHL: const i64 = 256\n```"
+// lsp: hover 351:7 "const G_AND: const i64 = 15\n```"
+// lsp: hover 352:7 "const G_F32_P1: const f32 = 0.1\n```"
+// lsp: hover 353:7 "const G_F32_ALIAS: const f32 = 0.1\n```"
+// lsp: hover 354:7 "const G_F32_WIDEN: const f64 = 0.10000000149011612\n```"
+// lsp: hover 355:7 "const G_F32_OVF: const f32 = inf\n```"
+// lsp: hover 356:7 "const G_F32_UND: const f32 = 0.0\n```"
+// lsp: hover 357:7 "const C_UNMUT: const i64 = 15\n```"
+// lsp: hover 360:11 "const C_EARLY: const i64\n```"
+// lsp: hover 361:11 "const C_EARLY: const i64\n```"
+// lsp: hover 366:11 "const C_M_DIRECT: const i64\n```"
+// lsp: hover 367:11 "const C_M_ADD: const i64\n```"
+// lsp: hover 368:11 "const C_M_OR: const i64\n```"
+// lsp: hover 369:11 "const C_M_SHL: const i64\n```"
+// lsp: hover 370:11 "const C_M_NEG: const i64\n```"
+// lsp: hover 371:11 "const C_M_NOT: const i64\n```"
+// lsp: hover 372:11 "const C_M_FLT: const f64\n```"
+// lsp: hover 373:11 "const C_M_FNOT: const f64\n```"
+// lsp: hover 374:11 "const C_M_TYPED: const i64\n```"
+// lsp: hover 375:11 "const C_M_ALIAS: const i64\n```"
+// lsp: hover 379:11 "const C_MF_CHAIN: const f64\n```"
+// lsp: hover 380:11 "const C_MF_NEG: const f64\n```"
+// lsp: hover 381:11 "const C_MF_ADD: const f64\n```"
+// lsp: hover 382:11 "const G_NAN2: const f64 = nan\n```"
+// lsp: hover 383:11 "const G_NINF: const f64 = -inf\n```"
+// lsp: hover 384:11 "const G_SHL: const i64 = 256\n```"
+// lsp: hover 385:11 "const G_AND: const i64 = 15\n```"
+// lsp: hover 386:11 "const G_F32_P1: const f32 = 0.1\n```"
+// lsp: hover 387:11 "const G_F32_ALIAS: const f32 = 0.1\n```"
+// lsp: hover 388:11 "const G_F32_WIDEN: const f64 = 0.10000000149011612\n```"
+// lsp: hover 389:11 "const G_F32_OVF: const f32 = inf\n```"
+// lsp: hover 390:11 "const G_F32_UND: const f32 = 0.0\n```"
+// lsp: hover 391:11 "const C_UNMUT: const i64 = 15\n```"
+// lsp: hover 392:11 "const C_M_DIRECT: const i64\n```"
+// lsp: hover 393:11 "const C_M_ADD: const i64\n```"
+// lsp: hover 394:11 "const C_M_OR: const i64\n```"
+// lsp: hover 395:11 "const C_M_SHL: const i64\n```"
+// lsp: hover 396:11 "const C_M_NEG: const i64\n```"
+// lsp: hover 397:11 "const C_M_NOT: const i64\n```"
+// lsp: hover 398:11 "const C_M_FLT: const f64\n```"
+// lsp: hover 399:11 "const C_M_FNOT: const f64\n```"
+// lsp: hover 400:11 "const C_M_ALIAS: const i64\n```"
+// lsp: hover 401:11 "const C_MF_CHAIN: const f64\n```"
+// lsp: hover 402:11 "const C_MF_NEG: const f64\n```"
+// lsp: hover 403:11 "const C_MF_ADD: const f64\n```"
