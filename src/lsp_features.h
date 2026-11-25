@@ -243,7 +243,6 @@ inline void AppendConstStrHover(string &out, string_view v, size_t max = kMaxCon
                 case 0:    out += "\\0"; break;
                 case '\\': out += "\\\\"; break;
                 case '"':  out += "\\\""; break;
-                case '\'': out += "\\'"; break;
                 default:
                     if (!len || (uint8_t)c < 0x20 || (uint8_t)c == 0x7F) {
                         char buf[8];
@@ -268,77 +267,74 @@ inline string FormatConstIntSuffix(int64_t val, bool uns, string_view text) {
     return cat(" = ", !text.empty() ? string(text) : dec);
 }
 
-inline string ConstValueSuffix(const VarDecl *decl, size_t idx, const VarDef *def = nullptr) {
+inline string FormatConstHover(const ConstHover &h) {
+    switch (h.kind) {
+        case ConstHover::NONE:
+            return {};
+        case ConstHover::INT:
+            return FormatConstIntSuffix(h.ival, h.uns, h.text);
+        case ConstHover::FLT: {
+            string s = " = ";
+            if (h.isf32) CatFloat(s, (float)h.fval);
+            else CatFloat(s, h.fval);
+            return s;
+        }
+        case ConstHover::BOOL:
+            return h.bval ? " = true" : " = false";
+        case ConstHover::STR: {
+            string s = " = ";
+            AppendConstStrHover(s, h.text);
+            return s;
+        }
+    }
+    return {};
+}
+
+inline string ConstValueSuffix(const VarDef *def) {
+    if (!def || def->hover.kind == ConstHover::NONE) return {};
+    for (auto p = def->hover.constfrom; p; p = p->constfrom ? p->constfrom : p->hover.constfrom)
+        if (p->refwrite) return {};
+    return FormatConstHover(def->hover);
+}
+
+// Fallback for unchecked declarations (e.g. past the end of an exemplar
+// instantiation): extract compatible literal initializers from the source AST.
+inline ConstHover UncheckedConstHover(const VarDecl *decl, size_t idx) {
     if (!decl || !decl->isconst || decl->byref || decl->results) return {};
     if (decl->inits.size() != decl->names.size() || idx >= decl->inits.size()) return {};
-    // When typechecked, def->hover is authoritative and immune to post-check
-    // optimizer rewrites.
-    if (def) {
-        for (auto p = def->hover.constfrom; p; p = p->constfrom ? p->constfrom : p->hover.constfrom)
-            if (p->refwrite) return {};
-        switch (def->hover.kind) {
-            case ConstHover::NONE:
-                return {};
-            case ConstHover::INT:
-                return FormatConstIntSuffix(def->hover.ival, def->hover.uns, def->hover.text);
-            case ConstHover::FLT: {
-                if (!def->hover.text.empty()) return cat(" = ", def->hover.text);
-                string s = " = ";
-                if (def->hover.isf32) CatFloat(s, (float)def->hover.fval);
-                else CatFloat(s, def->hover.fval);
-                return s;
-            }
-            case ConstHover::BOOL:
-                return def->hover.bval ? " = true" : " = false";
-            case ConstHover::STR: {
-                string s = " = ";
-                AppendConstStrHover(s, def->hover.text);
-                return s;
-            }
-        }
-        return {};
-    }
-    // Unchecked fallback (e.g. past the end of an exemplar instantiation): read
-    // literal source nodes compatible with the written annotation, if any.
     auto init = decl->inits[idx];
     auto dt = decl->type;
-    if (auto il = Is<IntLit>(init)) {
-        if (!dt || (IsIntT(dt) && !dt->ix && FitsIntStorage(il->val, il->uns, dt->intstorage)))
-            return FormatConstIntSuffix(il->val, il->uns, il->text);
-        if (dt->kind == TY_FLT) {
-            auto d = il->uns ? (double)(uint64_t)il->val : (double)il->val;
-            string s = " = ";
-            if (IsF32(dt)) CatFloat(s, (float)d);
-            else CatFloat(s, d);
-            return s;
+    auto intHover = [&](int64_t val, bool uns, string_view text) -> ConstHover {
+        if (!dt || (IsIntT(dt) && !dt->ix && FitsIntStorage(val, uns, dt->intstorage)))
+            return ConstHover::Int(val, uns, text);
+        if (dt->kind == TY_FLT)
+            return ConstHover::IntAsFlt(val, uns, IsF32(dt));
+        return {};
+    };
+    if (auto il = Is<IntLit>(init))
+        return intHover(il->val, il->uns, il->text);
+    if (auto fl = Is<FltLit>(init))
+        return (!dt || dt->kind == TY_FLT) ? ConstHover::Flt(fl->val, dt && IsF32(dt)) : ConstHover {};
+    if (auto u = Is<Unary>(init); u && u->op == T_MINUS) {
+        if (auto il = Is<IntLit>(u->child)) {
+            if (il->uns ? il->val != INT64_MIN : il->val == INT64_MIN) return {};
+            return intHover(il->uns ? INT64_MIN : (int64_t)(0u - (uint64_t)il->val), false, {});
         }
+        if (auto fl = Is<FltLit>(u->child))
+            return (!dt || dt->kind == TY_FLT) ? ConstHover::Flt(-fl->val, dt && IsF32(dt)) : ConstHover {};
         return {};
     }
-    if (auto fl = Is<FltLit>(init)) {
-        if (!dt || dt->kind == TY_FLT) {
-            if (dt && IsF32(dt)) {
-                auto narrowed = (double)(float)fl->val;
-                if (!fl->text.empty() && !F32ChangedMagnitude(fl->val, narrowed))
-                    return cat(" = ", fl->text);
-                string s = " = ";
-                CatFloat(s, (float)fl->val);
-                return s;
-            }
-            return cat(" = ", !fl->text.empty() ? string(fl->text) : cat(fl->val));
-        }
-        return {};
-    }
-    if (auto bl = Is<BoolLit>(init)) {
-        if (!dt || dt->kind == TY_BOOL) return bl->val ? " = true" : " = false";
-        return {};
-    }
+    if (auto bl = Is<BoolLit>(init))
+        return (!dt || dt->kind == TY_BOOL) ? ConstHover::Bool(bl->val) : ConstHover {};
     if (auto sl = Is<StrLit>(init)) {
-        if (!dt || (dt->kind == TY_SLICE && dt->sub && IsU8(dt->sub)) ||
-            (dt->kind == TY_ARRAY && dt->arr && dt->arr->sub && IsU8(dt->arr->sub))) {
-            string s = " = ";
-            AppendConstStrHover(s, sl->val);
-            return s;
+        if (dt && !IsByteSeqT(dt)) return {};
+        if (dt && dt->kind == TY_ARRAY && dt->arr->sizeexpr) {
+            auto sz = Is<IntLit>(dt->arr->sizeexpr);
+            if (!sz || sz->uns) return {};
+            if (dt->arr->akind == A_FIXED && (int64_t)sl->val.size() != sz->val) return {};
+            if (dt->arr->akind == A_LIMITED && (int64_t)sl->val.size() > sz->val) return {};
         }
+        return ConstHover::Str(sl->val);
     }
     return {};
 }
@@ -347,18 +343,7 @@ inline string VarDefHeader(const VarDef *vd, const VarDecl *decl = nullptr) {
     auto s = decl ? string(VarKeyword(decl))
                   : vd->isparam ? cat("parameter ", vd->isvar ? "var " : "")
                                 : string(vd->isvar ? "var " : "let ");
-
-    Append(s, vd->name, ": ", TypeText(vd->type));
-
-    if (decl) {
-        for (size_t i = 0; i < decl->names.size(); i++) {
-            if ((i < decl->defs.size() && decl->defs[i] == vd) || decl->names[i] == vd->name) {
-                s += ConstValueSuffix(decl, i, vd);
-                break;
-            }
-        }
-    }
-
+    Append(s, vd->name, ": ", TypeText(vd->type), ConstValueSuffix(vd));
     return s;
 }
 
@@ -960,9 +945,10 @@ inline HoverText HoverOf(const Located &loc, const Occurrence &occ) {
                 return x && x->defs.size() > i && x->defs[i] && x->defs[i]->type;
             });
             auto def = c ? Is<VarDecl>(c)->defs[i] : nullptr;
-            h.header = cat(VarKeyword(vd), vd->names[i], ": ",
-                           def ? TypeText(def->type) : vd->type ? TypeText(vd->type) : string("?"),
-                           ConstValueSuffix(vd, i, def));
+            h.header = def ? VarDefHeader(def, vd)
+                           : cat(VarKeyword(vd), vd->names[i], ": ",
+                                 vd->type ? TypeText(vd->type) : string("?"),
+                                 FormatConstHover(UncheckedConstHover(vd, i)));
             h.doc = DocText(vd->doc);
             if (c) NoteExemplar(h, an, c);
             else if (!vd->isglobal) Append(h.doc, h.doc.empty() ? "" : "\n\n", NotChecked(an, occ.node));

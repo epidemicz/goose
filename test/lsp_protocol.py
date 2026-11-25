@@ -744,6 +744,11 @@ def check_lsp_protocol(exe, base):
     builtins = fixtures / "builtins.goose"
     buitext = builtins.read_text(encoding="utf-8")
     queries(builtins, buitext, open_fixture(builtins, buitext))
+    # Constant initializer hover values: scalars, strings, aliases, mutations,
+    # float rounding/overflow, and UTF-8 truncation.
+    const_hover = fixtures / "const_hover.goose"
+    chtext = const_hover.read_text(encoding="utf-8")
+    queries(const_hover, chtext, open_fixture(const_hover, chtext))
 
     # Roots as files open and close (docs/design/language_server.md §4),
     # judged by the diagnostics an editor has once a request has had the

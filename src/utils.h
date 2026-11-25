@@ -14,7 +14,8 @@ inline void CatOne(string &s, bool v)          { s += v ? "true" : "false"; }
 // overloads leaves it ambiguous on one platform or the other.
 template<typename T> requires (is_integral_v<T> && !is_same_v<T, char> && !is_same_v<T, bool>)
 void CatOne(string &s, T v)                    { s += to_string(v); }
-template<typename T> inline void CatFloat(string &s, T v) {
+template<typename T> requires is_floating_point_v<T>
+inline void CatFloat(string &s, T v) {
     // The spellings Goose programs print (§3.7), whatever the C library's.
     if (v != v) { s += "nan"; return; }
     if (std::isinf(v)) { s += v > 0 ? "inf" : "-inf"; return; }
@@ -44,10 +45,6 @@ template<typename T> inline void CatFloat(string &s, T v) {
     s += n > x + 1 ? dig.substr(x + 1) : "0";
 }
 inline void CatOne(string &s, double v) { CatFloat(s, v); }
-
-inline bool F32ChangedMagnitude(double raw, double narrowed) {
-    return (std::isinf(narrowed) && !std::isinf(raw)) || (narrowed == 0.0 && raw != 0.0);
-}
 
 template<typename... Ts> void Append(string &s, const Ts &...args) {
     (CatOne(s, args), ...);

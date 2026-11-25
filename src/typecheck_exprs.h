@@ -2102,7 +2102,7 @@ inline Val TypeCheck::NumericBinary(Binary *b, Val lv, Val rv, TypeExpr *&ct, bo
                     default:
                         v.fval = y != 0 ? x / y
                                : (x == 0 || std::isnan(x)) ? numeric_limits<double>::quiet_NaN()
-                               : (signbit(x) != signbit(y) ? -1.0 : 1.0) *
+                               : (std::signbit(x) != std::signbit(y) ? -1.0 : 1.0) *
                                  numeric_limits<double>::infinity();
                         break;
                 }
@@ -2225,32 +2225,23 @@ inline Val TypeCheck::NumericUnary(Unary *u, const Val &cv, bool trial) {
 // one, now of the float's value; a literal parameter is one only where it
 // is an integer.
 inline void TypeCheck::IntToFloat(Val &v, TypeExpr *ft) {
+    auto f32 = IsF32(ft);
     if (v.ck == CK_INT) {
         v.ck = CK_FLT;
-        v.fval = v.uns ? (double)(uint64_t)v.ival : (double)v.ival;
-        if (IsF32(ft)) v.fval = v.uns ? (double)(float)(uint64_t)v.ival : (double)(float)v.ival;
+        v.fval = f32 ? (v.uns ? (double)(float)(uint64_t)v.ival : (double)(float)v.ival)
+                     : (v.uns ? (double)(uint64_t)v.ival : (double)v.ival);
         v.uns = false;
         v.hover = {};
     } else if (v.notconst) {
-        auto d = (double)(~v.litlo);
-        v.hover = {};
-        v.hover.kind = ConstHover::FLT;
-        v.hover.isf32 = IsF32(ft);
-        v.hover.fval = v.hover.isf32 ? (double)(float)d : d;
-        v.hover.constfrom = v.constfrom;
+        v.hover = ConstHover::IntAsFlt(~v.litlo, false, f32, v.constfrom);
     } else if (v.hover.kind == ConstHover::INT) {
-        auto d = v.hover.uns ? (double)(uint64_t)v.hover.ival : (double)v.hover.ival;
-        auto from = v.hover.constfrom;
-        v.hover = {};
-        v.hover.kind = ConstHover::FLT;
-        v.hover.isf32 = IsF32(ft);
-        v.hover.fval = v.hover.isf32 ? (double)(float)d : d;
-        v.hover.constfrom = from;
+        v.hover = ConstHover::IntAsFlt(v.hover.ival, v.hover.uns, f32, v.hover.constfrom);
     }
     v.unsized = false;
     v.unsizedparam = nullptr;
     v.litint = false;
     v.flexint = false;
+    v.notconst = false;
     v.nonneg = false;
     v.lvalue = false;
     v.type = ft;
@@ -2370,7 +2361,7 @@ inline bool TypeCheck::SameNumVal(const Val &a, const Val &b) {
         return false;
     if (a.notconst && a.litlo != b.litlo) return false;
     if (a.ck == CK_INT && (a.ival != b.ival || a.uns != b.uns)) return false;
-    if (a.ck == CK_FLT && a.fval != b.fval) return false;
+    if (a.ck == CK_FLT && a.fval != b.fval && !(std::isnan(a.fval) && std::isnan(b.fval))) return false;
     return !a.litint || (a.litlo == b.litlo && a.lithi == b.lithi);
 }
 

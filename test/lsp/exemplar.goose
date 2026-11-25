@@ -96,6 +96,11 @@ fn exemplar_consts<T>(x: T, n: i64) -> i64 {
     const UNCHK_F32_OVF: f32    = 1e300;
     const UNCHK_F32_UND: f32    = 1e-50;
     const UNCHK_IX: u32 in ex_arr = 1;
+    const UNCHK_F32_OVF2: f32   = 1e400;
+    const UNCHK_F32_DR:   f32   = 18014401730707455;
+    const UNCHK_NEG = -5;
+    const UNCHK_BAD_LEN:  u8[2]     = "hello";
+    const UNCHK_EXPR_LEN: u8[1 + 1] = "hello";
     stop
 }
 
@@ -113,3 +118,8 @@ fn exemplar_consts<T>(x: T, n: i64) -> i64 {
 // lsp: hover 96:11 "const UNCHK_F32_OVF: f32 = inf\n```"
 // lsp: hover 97:11 "const UNCHK_F32_UND: f32 = 0.0\n```"
 // lsp: hover 98:11 "const UNCHK_IX: u32 in ex_arr\n```"
+// lsp: hover 99:11 "const UNCHK_F32_OVF2: f32 = inf\n```"
+// lsp: hover 100:11 "const UNCHK_F32_DR: f32 = 1.80144e+16\n```"
+// lsp: hover 101:11 "const UNCHK_NEG: ? = -5\n```"
+// lsp: hover 102:11 "const UNCHK_BAD_LEN: u8[2]\n```"
+// lsp: hover 103:11 "const UNCHK_EXPR_LEN: u8[(1 + 1)]\n```"

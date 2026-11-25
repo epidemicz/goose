@@ -371,6 +371,10 @@ inline bool IsU8(const TypeExpr *t) {
 // An index or bound type (`u32 in a`, `u32 upto a`).
 inline bool IsIndexT(const TypeExpr *t) { return t && t->kind == TY_INT && t->ix; }
 inline bool IsF32(const TypeExpr *t) { return t && t->kind == TY_FLT && t->fltstorage == FS_F32; }
+inline bool IsByteSeqT(const TypeExpr *t) {
+    return t && ((t->kind == TY_SLICE && t->sub && IsU8(t->sub)) ||
+                 (t->kind == TY_ARRAY && t->arr && t->arr->sub && IsU8(t->arr->sub)));
+}
 // The ADT a variant type is a variant of, and an enum type's own; else null.
 inline TypeExpr *AdtOf(TypeExpr *t) {
     if (t->kind == TY_VARIANT) return t->var->adt->kind == TY_ENUM ? t->var->adt : nullptr;
@@ -698,8 +702,44 @@ struct ConstHover {
         int64_t ival = 0;
         double fval;
     };
-    string_view text;      // STR: string bytes; INT/FLT: original literal spelling (empty if folded/alias).
+    string_view text;      // STR: string bytes; INT: original literal spelling (empty if folded/alias).
     const VarDef *constfrom = nullptr;  // Named constant chain to check for refwrite at hover time.
+
+    static ConstHover Int(int64_t v, bool u = false, string_view t = {}, const VarDef *from = nullptr) {
+        ConstHover h;
+        h.kind = INT;
+        h.ival = v;
+        h.uns = u;
+        h.text = t;
+        h.constfrom = from;
+        return h;
+    }
+    static ConstHover Flt(double v, bool f32 = false, const VarDef *from = nullptr) {
+        ConstHover h;
+        h.kind = FLT;
+        h.isf32 = f32;
+        h.fval = f32 ? (double)(float)v : v;
+        h.constfrom = from;
+        return h;
+    }
+    static ConstHover IntAsFlt(int64_t v, bool u, bool f32, const VarDef *from = nullptr) {
+        // Cast directly from int64_t/uint64_t to float for f32 to avoid double rounding.
+        double fv = f32 ? (u ? (double)(float)(uint64_t)v : (double)(float)v)
+                        : (u ? (double)(uint64_t)v : (double)v);
+        return Flt(fv, f32, from);
+    }
+    static ConstHover Bool(bool v) {
+        ConstHover h;
+        h.kind = BOOL;
+        h.bval = v;
+        return h;
+    }
+    static ConstHover Str(string_view v) {
+        ConstHover h;
+        h.kind = STR;
+        h.text = v;
+        return h;
+    }
 };
 
 // The checked value of an expression (typecheck.h): its type, where it
