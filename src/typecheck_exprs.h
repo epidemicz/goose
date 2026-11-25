@@ -2099,7 +2099,12 @@ inline Val TypeCheck::NumericBinary(Binary *b, Val lv, Val rv, TypeExpr *&ct, bo
                     case T_PLUS:  v.fval = x + y; break;
                     case T_MINUS: v.fval = x - y; break;
                     case T_MUL:   v.fval = x * y; break;
-                    default:      v.fval = y != 0 ? x / y : 0; break;
+                    default:
+                        v.fval = y != 0 ? x / y
+                               : (x == 0 || std::isnan(x)) ? numeric_limits<double>::quiet_NaN()
+                               : (std::signbit(x) != std::signbit(y) ? -1.0 : 1.0) *
+                                 numeric_limits<double>::infinity();
+                        break;
                 }
                 if (IsF32(ct)) v.fval = (double)(float)v.fval;
             }
@@ -2220,16 +2225,23 @@ inline Val TypeCheck::NumericUnary(Unary *u, const Val &cv, bool trial) {
 // one, now of the float's value; a literal parameter is one only where it
 // is an integer.
 inline void TypeCheck::IntToFloat(Val &v, TypeExpr *ft) {
+    auto f32 = IsF32(ft);
     if (v.ck == CK_INT) {
         v.ck = CK_FLT;
-        v.fval = v.uns ? (double)(uint64_t)v.ival : (double)v.ival;
-        if (IsF32(ft)) v.fval = v.uns ? (double)(float)(uint64_t)v.ival : (double)(float)v.ival;
+        v.fval = f32 ? (v.uns ? (double)(float)(uint64_t)v.ival : (double)(float)v.ival)
+                     : (v.uns ? (double)(uint64_t)v.ival : (double)v.ival);
         v.uns = false;
+        v.hover = {};
+    } else if (v.notconst) {
+        v.hover = ConstHover::IntAsFlt(~v.litlo, false, f32, v.constfrom);
+    } else if (v.hover.kind == ConstHover::INT) {
+        v.hover = ConstHover::IntAsFlt(v.hover.ival, v.hover.uns, f32, v.hover.constfrom);
     }
     v.unsized = false;
     v.unsizedparam = nullptr;
     v.litint = false;
     v.flexint = false;
+    v.notconst = false;
     v.nonneg = false;
     v.lvalue = false;
     v.type = ft;

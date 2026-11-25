@@ -2697,6 +2697,31 @@ inline void TypeCheck::CheckVarDecl(VarDecl *vd, bool global) {
         d->constfval = v.fval;
         d->constfrom = d->constlit ? v.constfrom : nullptr;
         Finish(d, ann ? ann : v.type, &v, vd->inits[i]);
+        if (vd->isconst && !vd->byref && !vd->results) {
+            auto dt = LoadType(d->type);
+            if (IsIntT(dt) && !dt->ix) {
+                if (v.notconst) {
+                    auto w = WrapStorage(~v.litlo, dt->intstorage);
+                    d->hover = ConstHover::Int(w, dt->intstorage == IS_U64 && w < 0, {}, v.constfrom);
+                } else if (v.ck == CK_INT) {
+                    auto t = v.hover.kind == ConstHover::INT ? v.hover.text : string_view {};
+                    d->hover = ConstHover::Int(v.ival, v.uns, t, v.constfrom);
+                } else if (v.hover.kind == ConstHover::INT) {
+                    d->hover = v.hover;
+                    if (!d->hover.constfrom) d->hover.constfrom = v.constfrom;
+                }
+            } else if (dt->kind == TY_FLT) {
+                if (v.ck == CK_FLT) {
+                    d->hover = ConstHover::Flt(v.fval, IsF32(dt), v.constfrom);
+                } else if (v.hover.kind == ConstHover::FLT) {
+                    auto from = v.hover.constfrom ? v.hover.constfrom : v.constfrom;
+                    d->hover = ConstHover::Flt(v.hover.fval, IsF32(dt), from);
+                }
+            } else if ((dt->kind == TY_BOOL && v.hover.kind == ConstHover::BOOL) ||
+                       (IsByteSeqT(dt) && v.hover.kind == ConstHover::STR)) {
+                d->hover = v.hover;
+            }
+        }
         auto len = Is<Dot>(vd->inits[i]);
         if (!vd->isvar && !global && len && len->member == B_LEN &&
             d->type->kind == TY_INT && d->type->intstorage == IS_I64)

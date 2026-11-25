@@ -10,6 +10,7 @@ namespace goose {
 inline Val IntLit::Check(TypeCheck &tc, TypeExpr *) {
     Val v;
     v.type = tc.ast.inttypes[uns ? IS_U64 : IS_I64];
+    v.hover = ConstHover::Int(val, uns, text);
     if (fixedtype) { v.type = fixedtype; v.nonneg = uns || val >= 0; return v; }
     v.ck = CK_INT;
     v.ival = val;
@@ -21,6 +22,7 @@ inline Val IntLit::Check(TypeCheck &tc, TypeExpr *) {
 inline Val FltLit::Check(TypeCheck &tc, TypeExpr *) {
     Val v;
     v.type = tc.ast.flttypes[FS_F64];
+    v.hover = ConstHover::Flt(val, fixedtype && IsF32(fixedtype));
     if (fixedtype) { v.type = fixedtype; return v; }
     v.ck = CK_FLT;
     v.fval = val;
@@ -30,6 +32,7 @@ inline Val FltLit::Check(TypeCheck &tc, TypeExpr *) {
 inline Val BoolLit::Check(TypeCheck &tc, TypeExpr *) {
     Val v;
     v.type = tc.ast.booltype;
+    v.hover = ConstHover::Bool(val);
     return v;
 }
 
@@ -55,6 +58,7 @@ inline Val SelfRef::Check(TypeCheck &tc, TypeExpr *) {
 inline Val StrLit::Check(TypeCheck &tc, TypeExpr *expected) {
     Val v;
     v.strlit = true;
+    v.hover = ConstHover::Str(val);
     v.Set(nullptr, true);   // Static data owns what it holds.
     v.writable = false;
     if (expected) {
@@ -140,6 +144,10 @@ inline Val Ident::Check(TypeCheck &tc, TypeExpr *) {
                 if (vd->isglobal) v.contents.Set(nullptr, false);
                 else v.contents = vd->contents;
             }
+        }
+        if (!vd->unsized && vd->hover.kind != ConstHover::NONE) {
+            v.hover = vd->hover;
+            if (v.hover.kind != ConstHover::STR) v.hover.text = {};
         }
         return v;
     }
@@ -420,6 +428,8 @@ inline Val Unary::Check(TypeCheck &tc, TypeExpr *) {
             tc.Error(this, cat("! requires bool, got ", tc.TypeStr(t)));
         Val r;
         r.type = tc.ast.booltype;
+        if (v.hover.kind == ConstHover::BOOL)
+            r.hover = ConstHover::Bool(!v.hover.bval);
         return r;
     }
     if (auto t = tc.LoadType(v.type); IsOpaque(t)) {

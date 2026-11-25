@@ -7733,9 +7733,11 @@ implicit `it`.
 
 **Features** (`lsp_features.h`). Each request locates its file's analysis
 and the occurrence at its position (`Locate`, `FileIndex::At`). Hover
-renders a declaration header (`FnHeader`, `VariantHeader`), the type a clone
-gave the node, the specializations a function has (`SpecsText`) and the
-documentation comment (`DocText`, with the `//` stripped); for builtins
+renders a declaration header (`FnHeader`, `VariantHeader`, `VarDefHeader`), the
+type a clone gave the node, `= value` on a `const` header for a literal or
+checker-folded scalar/string initializer (`ConstValueSuffix`), the
+specializations a function has (`SpecsText`) and the documentation comment
+(`DocText`, with the `//` stripped); for builtins
 (`builtins.h`, `builtindocs` compact form strings, compile-time checked via
 `CheckBuiltinDocs()`), it renders the arity-matched form, concrete call
 types and documentation (or all forms without concrete types when uncalled or

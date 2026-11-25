@@ -195,9 +195,155 @@ inline string SpecsText(const SFunction *sf, size_t most) {
 // The keyword of a `let`, `var` or `const` declaration.
 inline const char *VarKeyword(const VarDecl *vd) { return vd->isconst ? "const " : vd->isvar ? "var " : "let "; }
 
-inline string VarDefHeader(const VarDef *vd) {
-    auto s = vd->isparam ? cat("parameter ", vd->isvar ? "var " : "") : string(vd->isvar ? "var " : "let ");
-    Append(s, vd->name, ": ", TypeText(vd->type));
+// Hover headers show at most this many bytes of a const string initializer.
+inline constexpr size_t kMaxConstStrHoverBytes = 64;
+
+// Length of the valid RFC 3629 UTF-8 sequence starting at v[i], or 0 when
+// v[i] is an invalid or truncated high byte (e.g. from a \xNN string escape).
+inline size_t ValidUtf8SeqLen(string_view v, size_t i) {
+    auto b0 = (uint8_t)v[i];
+    if (b0 < 0x80) return 1;
+    auto cont = [&](size_t j) { return j < v.size() && ((uint8_t)v[j] & 0xC0) == 0x80; };
+    if (b0 >= 0xC2 && b0 <= 0xDF && cont(i + 1)) return 2;
+    if (b0 >= 0xE0 && b0 <= 0xEF && cont(i + 1) && cont(i + 2)) {
+        auto b1 = (uint8_t)v[i + 1];
+        if ((b0 == 0xE0 && b1 < 0xA0) || (b0 == 0xED && b1 > 0x9F)) return 0;
+        return 3;
+    }
+    if (b0 >= 0xF0 && b0 <= 0xF4 && cont(i + 1) && cont(i + 2) && cont(i + 3)) {
+        auto b1 = (uint8_t)v[i + 1];
+        if ((b0 == 0xF0 && b1 < 0x90) || (b0 == 0xF4 && b1 > 0x8F)) return 0;
+        return 4;
+    }
+    return 0;
+}
+
+// Quote and escape a const string initializer for hover, truncating at a UTF-8
+// code-point boundary within max source bytes and escaping non-UTF-8 bytes as
+// \xNN so the JSON-RPC stream stays valid UTF-8.
+inline void AppendConstStrHover(string &out, string_view v, size_t max = kMaxConstStrHoverBytes) {
+    out += '"';
+    size_t i = 0;
+    auto truncated = false;
+    while (i < v.size()) {
+        auto len = ValidUtf8SeqLen(v, i);
+        size_t step = len ? len : 1;
+        if (i + step > max) {
+            truncated = true;
+            break;
+        }
+        if (len > 1) {
+            out.append(v.data() + i, len);
+        } else {
+            char c = v[i];
+            switch (c) {
+                case '\n': out += "\\n"; break;
+                case '\t': out += "\\t"; break;
+                case '\r': out += "\\r"; break;
+                case 0:    out += "\\0"; break;
+                case '\\': out += "\\\\"; break;
+                case '"':  out += "\\\""; break;
+                default:
+                    if (!len || (uint8_t)c < 0x20 || (uint8_t)c == 0x7F) {
+                        char buf[8];
+                        snprintf(buf, sizeof(buf), "\\x%02x", (uint8_t)c);
+                        out += buf;
+                    } else {
+                        out += c;
+                    }
+            }
+        }
+        i += step;
+    }
+    if (truncated) out += "...";
+    out += '"';
+}
+
+inline string FormatConstIntSuffix(int64_t val, bool uns, string_view text) {
+    auto dec = uns ? cat((uint64_t)val) : cat(val);
+    auto nondec = !text.empty() &&
+                  (text[0] == '\'' || text.rfind("0x", 0) == 0 || text.rfind("0X", 0) == 0);
+    if (nondec) return cat(" = ", text, " // ", dec);
+    return cat(" = ", !text.empty() ? string(text) : dec);
+}
+
+inline string FormatConstHover(const ConstHover &h) {
+    switch (h.kind) {
+        case ConstHover::NONE:
+            return {};
+        case ConstHover::INT:
+            return FormatConstIntSuffix(h.ival, h.uns, h.text);
+        case ConstHover::FLT: {
+            string s = " = ";
+            if (h.isf32) CatFloat(s, (float)h.fval);
+            else CatFloat(s, h.fval);
+            return s;
+        }
+        case ConstHover::BOOL:
+            return h.bval ? " = true" : " = false";
+        case ConstHover::STR: {
+            string s = " = ";
+            AppendConstStrHover(s, h.text);
+            return s;
+        }
+    }
+    return {};
+}
+
+inline string ConstValueSuffix(const VarDef *def) {
+    if (!def || def->hover.kind == ConstHover::NONE) return {};
+    for (auto p = def->hover.constfrom; p; p = p->constfrom ? p->constfrom : p->hover.constfrom)
+        if (p->refwrite) return {};
+    return FormatConstHover(def->hover);
+}
+
+// Fallback for unchecked declarations (e.g. past the end of an exemplar
+// instantiation): extract compatible literal initializers from the source AST.
+inline ConstHover UncheckedConstHover(const VarDecl *decl, size_t idx) {
+    if (!decl || !decl->isconst || decl->byref || decl->results) return {};
+    if (decl->inits.size() != decl->names.size() || idx >= decl->inits.size()) return {};
+    auto init = decl->inits[idx];
+    auto dt = decl->type;
+    auto intHover = [&](int64_t val, bool uns, string_view text) -> ConstHover {
+        if (!dt || (IsIntT(dt) && !dt->ix && FitsIntStorage(val, uns, dt->intstorage)))
+            return ConstHover::Int(val, uns, text);
+        if (dt->kind == TY_FLT)
+            return ConstHover::IntAsFlt(val, uns, IsF32(dt));
+        return {};
+    };
+    if (auto il = Is<IntLit>(init))
+        return intHover(il->val, il->uns, il->text);
+    if (auto fl = Is<FltLit>(init))
+        return (!dt || dt->kind == TY_FLT) ? ConstHover::Flt(fl->val, dt && IsF32(dt)) : ConstHover {};
+    if (auto u = Is<Unary>(init); u && u->op == T_MINUS) {
+        if (auto il = Is<IntLit>(u->child)) {
+            if (il->uns ? il->val != INT64_MIN : il->val == INT64_MIN) return {};
+            return intHover(il->uns ? INT64_MIN : (int64_t)(0u - (uint64_t)il->val), false, {});
+        }
+        if (auto fl = Is<FltLit>(u->child))
+            return (!dt || dt->kind == TY_FLT) ? ConstHover::Flt(-fl->val, dt && IsF32(dt)) : ConstHover {};
+        return {};
+    }
+    if (auto bl = Is<BoolLit>(init))
+        return (!dt || dt->kind == TY_BOOL) ? ConstHover::Bool(bl->val) : ConstHover {};
+    if (auto sl = Is<StrLit>(init)) {
+        if (dt && !IsByteSeqT(dt)) return {};
+        if (dt && dt->kind == TY_ARRAY && dt->arr->sizeexpr) {
+            auto sz = Is<IntLit>(dt->arr->sizeexpr);
+            if (!sz || sz->uns) return {};
+            if (dt->arr->akind == A_FIXED && (int64_t)sl->val.size() != sz->val) return {};
+            if (dt->arr->akind == A_LIMITED && (int64_t)sl->val.size() > sz->val) return {};
+        }
+        return ConstHover::Str(sl->val);
+    }
+    return {};
+}
+
+inline string VarDefHeader(const VarDef *vd, const VarDecl *decl = nullptr) {
+    auto s = decl ? string(VarKeyword(decl))
+                  : vd->isparam ? cat("parameter ", vd->isvar ? "var " : "")
+                                : string(vd->isvar ? "var " : "let ");
+    Append(s, vd->name, ": ", TypeText(vd->type), ConstValueSuffix(vd));
     return s;
 }
 
@@ -645,8 +791,9 @@ inline HoverText HoverIdent(const Located &loc, const Occurrence &occ) {
     }
     if (auto ci = ResolvedIdent(an, occ)) {
         if (ci->vdef) {
-            h.header = VarDefHeader(ci->vdef);
-            if (auto vd = an.VarDeclOf(ci->vdef)) h.doc = DocText(vd->doc);
+            auto vd = an.VarDeclOf(ci->vdef);
+            h.header = VarDefHeader(ci->vdef, vd);
+            if (vd) h.doc = DocText(vd->doc);
             auto types = an.TypesOf(occ.node, 4);
             if (types.size() > 1) {
                 h.extra = "// in other instantiations:";
@@ -798,8 +945,10 @@ inline HoverText HoverOf(const Located &loc, const Occurrence &occ) {
                 return x && x->defs.size() > i && x->defs[i] && x->defs[i]->type;
             });
             auto def = c ? Is<VarDecl>(c)->defs[i] : nullptr;
-            h.header = cat(VarKeyword(vd), vd->names[i], ": ",
-                           def ? TypeText(def->type) : vd->type ? TypeText(vd->type) : string("?"));
+            h.header = def ? VarDefHeader(def, vd)
+                           : cat(VarKeyword(vd), vd->names[i], ": ",
+                                 vd->type ? TypeText(vd->type) : string("?"),
+                                 FormatConstHover(UncheckedConstHover(vd, i)));
             h.doc = DocText(vd->doc);
             if (c) NoteExemplar(h, an, c);
             else if (!vd->isglobal) Append(h.doc, h.doc.empty() ? "" : "\n\n", NotChecked(an, occ.node));
