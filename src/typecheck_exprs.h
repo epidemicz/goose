@@ -2361,7 +2361,7 @@ inline bool TypeCheck::SameNumVal(const Val &a, const Val &b) {
         return false;
     if (a.notconst && a.litlo != b.litlo) return false;
     if (a.ck == CK_INT && (a.ival != b.ival || a.uns != b.uns)) return false;
-    if (a.ck == CK_FLT && a.fval != b.fval && !(std::isnan(a.fval) && std::isnan(b.fval))) return false;
+    if (a.ck == CK_FLT && a.fval != b.fval) return false;
     return !a.litint || (a.litlo == b.litlo && a.lithi == b.lithi);
 }
 

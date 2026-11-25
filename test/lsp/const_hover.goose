@@ -198,6 +198,8 @@ fn const_hover_round3() {
     print(G_U64_F32);
     print(G_STR_64);
     print(G_DONT);
+    const TRAIL_ZERO = 1.50;
+    print(TRAIL_ZERO);
 }
 
 fn main() {
@@ -244,6 +246,7 @@ fn main() {
 // lsp: hover 50:7 "const G_F32_PREC: const f32 = 16777216.0\n```"
 // lsp: hover 51:7 "const G_F32_PREC_AL: const f32 = 16777216.0\n```"
 // lsp: hover 52:7 "const G_F32_PI: const f32 = 3.1415927\n```"
+// lsp: hover 53:7 "const G_BIG_I: const i64 = 18014401730707455\n```"
 // lsp: hover 54:7 "const G_BIG_F_DIR: const f32 = 1.80144e+16\n```"
 // lsp: hover 55:7 "const G_BIG_F_AL: const f32 = 1.80144e+16\n```"
 // lsp: hover 56:7 "const G_BIG_NOT: const f32 = -1.80144e+16\n```"
@@ -253,6 +256,7 @@ fn main() {
 // lsp: hover 61:7 "const G_F64_HEX: const f64 = 12.0\n```"
 // lsp: hover 62:7 "const G_NEG_ZERO: const f64 = -0.0\n```"
 // lsp: hover 63:7 "const G_I64_MIN: const i64 = -9223372036854775808\n```"
+// lsp: hover 64:7 "const G_U64_SRC: const u64 = 9223372586610720769\n```"
 // lsp: hover 65:7 "const G_U64_F32: const f32 = 9.223373e+18\n```"
 // lsp: hover 66:7 "const G_STR_64: const u8[:] = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n```"
 // lsp: hover 67:7 "const G_DONT: const u8[:] = \"don't\"\n```"
@@ -359,3 +363,5 @@ fn main() {
 // lsp: hover 198:11 "const G_U64_F32: const f32 = 9.223373e+18\n```"
 // lsp: hover 199:11 "const G_STR_64: const u8[:] = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n```"
 // lsp: hover 200:11 "const G_DONT: const u8[:] = \"don't\"\n```"
+// lsp: hover 201:11 "const TRAIL_ZERO: const f64 = 1.5\n```"
+// lsp: hover 202:11 "const TRAIL_ZERO: const f64 = 1.5\n```"
